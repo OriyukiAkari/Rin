@@ -44,6 +44,13 @@ The project uses a unified CLI tool located at `cli/bin/rin.ts`. Command impleme
 - `bun cli/bin/rin.ts db migrate` - Run database migrations
 - `bun cli/bin/rin.ts release <version>` - Create a new release
 
+## Release ledger
+
+Follow `docs/version-lines.md` for the 1.x/2.x inheritance rule, changelog ownership, immutable
+baseline tags, verification requirements, and remote publication sequence. Feature work must hand
+off evidence to the version-ledger task and must not independently move release tags or publish a
+competing changelog.
+
 ## Architecture Status
 
 This repository is a product monorepo, not a framework monorepo.

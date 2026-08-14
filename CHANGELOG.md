@@ -119,6 +119,30 @@ which automatically generates release notes from commit messages.
 - Raw Markdown HTML and custom footer HTML are sanitized; footer scripts are no longer executed.
 - Cross-origin writes are origin-checked, public network fetches block private targets and unsafe redirects, and static responses prevent framing and unrestricted scripts.
 
+### Baseline capability inventory
+
+The v1.0 baseline already contained a broader product surface than the short README feature list
+made explicit. These capabilities are recorded here so later releases can distinguish inherited
+behavior from newly added work:
+
+- Moments, timeline, full-site search, hashtag indexes, pinned feeds, and previous/next article
+  navigation.
+- RSS, Atom, and JSON Feed delivery with scheduled cache generation and real-time fallback.
+- WordPress XML import with owner assignment, tag normalization, cache invalidation, and optional
+  AI-summary queue integration.
+- Asynchronous AI summaries, queue status and retry controls, and compatibility backfill tasks.
+- PV/UV counters using HyperLogLog, together with migration tools for historical visit data.
+- Friend applications, approval and sorting, plus the 20-minute availability-check cron task.
+- Guest comments, moderation controls, configurable webhooks, and administrator deletion.
+- Site health, queue status, compatibility-task, profile, and settings administration pages.
+- Configurable header behavior/layout, feed list/card layouts, theme color, favicon, site identity,
+  footer, comment behavior, counters, login visibility, RSS, friend automation, webhooks, and AI.
+- Monaco-based Markdown editing and rendering with image upload, Mermaid, KaTeX, code highlighting,
+  callouts, image metadata, lightbox behavior, and table-of-contents support.
+- English, Simplified Chinese, Traditional Chinese, and Japanese client translations.
+- A unified CLI for local development, D1 migration, Cloudflare deployment, release preparation,
+  and SEO rendering.
+
 ### Upgrade notes
 
 - Apply `server/sql/0011.sql`, rotate `JWT_SECRET`, configure `RIN_GITHUB_ADMIN_ID` for GitHub administration, and review guest-comment/footer behavior. See `docs/v1.0-hardening.md`.
