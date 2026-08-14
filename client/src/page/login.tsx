@@ -1,9 +1,7 @@
 import { t } from "i18next";
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
-import { ButtonWithLoading } from "../components/button";
-import { Icon } from "../components/icon";
-import { Input } from "../components/input";
+import { ButtonWithLoading, Icon, Input } from "@rin/ui";
 import { client, oauth_url } from "../app/runtime";
 import { getLoginRedirectPath } from "../utils/auth-redirect";
 

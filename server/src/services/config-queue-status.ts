@@ -1,6 +1,6 @@
 import { eq, desc, ne } from "drizzle-orm";
 import { feeds } from "../db/schema";
-import { clearFeedCache } from "./feed";
+import { clearFeedCache } from "./clear-feed-cache";
 import { syncFeedAISummaryQueueState } from "./feed-ai-summary";
 
 type QueueTaskStatus = "idle" | "pending" | "processing" | "completed" | "failed";

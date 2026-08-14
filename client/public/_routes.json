@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "include": [
+    "/api",
+    "/api/*",
+    "/rss.xml",
+    "/atom.xml",
+    "/rss.json",
+    "/feed.json",
+    "/feed.xml",
+    "/favicon",
+    "/favicon/*",
+    "/favicon.ico"
+  ],
+  "exclude": []
+}

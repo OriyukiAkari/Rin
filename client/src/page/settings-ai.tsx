@@ -1,5 +1,6 @@
 import {
   SearchableSelect,
+  Button,
   SettingsBadge,
   SettingsCard,
   SettingsCardBody,
@@ -11,7 +12,6 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import ReactLoading from "react-loading";
 import { client } from "../app/runtime";
-import { Button } from "../components/button";
 import { useAlert } from "../components/dialog";
 import { ItemTitle } from "./settings-items";
 import {

@@ -1,4 +1,4 @@
-import type { HeaderLayoutOption } from "./layout-options";
+import type { HeaderLayoutOption } from "@rin/config";
 import { getHeaderLayoutDefinition } from "./layout-registry";
 import type { HeaderLayoutPreviewData } from "./layout-types";
 import { SettingsPreviewCard } from "../settings-preview-card";

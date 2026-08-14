@@ -95,16 +95,17 @@ bun run deploy:client
 **Optional environment variables:**
 
 - `WORKER_NAME` - Backend worker name (default: `rin-server`)
-- `PAGES_NAME` - Frontend pages name (default: `rin-client`)
+- `PAGES_PROJECT_NAME` - Frontend Pages project name (default: `rin-client`); `PAGES_NAME` remains a compatibility alias
 - `DB_NAME` - D1 database name (default: `rin`)
-- `R2_BUCKET_NAME` - R2 bucket name. If set, deploy derives the matching `S3_*` values automatically. If unset, no bucket is auto-selected.
+- `R2_BUCKET_NAME` - R2 bucket name (default: `<worker-name>-objects`)
 
 The deployment script will automatically:
 
-- Create D1 database if it doesn't exist
-- Derive `S3_*` storage settings from `R2_BUCKET_NAME` only when it is explicitly set
+- Create the D1 database and R2 object bucket if they do not exist
+- Derive compatible storage settings from the canonical R2 bucket
 - Deploy backend to Workers
 - Build and deploy frontend to Pages
+- Connect Pages Functions to the Worker through the `RIN_API` service binding
 - Run database migrations
 
 ### GitHub Actions Workflows
@@ -123,7 +124,7 @@ The repository includes several automated workflows:
 
 **Optional configuration (Repository Settings → Secrets and variables → Variables):**
 
-- `WORKER_NAME`, `PAGES_NAME`, `DB_NAME` - Resource names
+- `WORKER_NAME`, `PAGES_PROJECT_NAME`, `DB_NAME` - Resource names
 - `NAME`, `DESCRIPTION`, `AVATAR` - Site configuration
 - `R2_BUCKET_NAME` - Specific R2 bucket to use
 

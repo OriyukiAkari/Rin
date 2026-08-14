@@ -12,7 +12,9 @@ const failures: string[] = [];
 for (const file of files) {
   const extension = file.slice(file.lastIndexOf("."));
   if (!extensions.has(extension)) continue;
-  const data = await Bun.file(file).arrayBuffer();
+  const source = Bun.file(file);
+  if (!(await source.exists())) continue;
+  const data = await source.arrayBuffer();
   const bytes = new Uint8Array(data);
   if (bytes.includes(0)) {
     failures.push(`${file}: contains NUL bytes`);

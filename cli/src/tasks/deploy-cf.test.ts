@@ -1,10 +1,38 @@
 import { describe, expect, it } from "bun:test";
 import {
   buildWranglerObservabilityConfig,
+  buildPagesWranglerConfig,
+  buildDefaultR2BucketName,
   buildWranglerQueueConfig,
   buildWranglerTriggersConfig,
   collectWorkerSecrets,
+  includesPagesProject,
 } from "./deploy-cf";
+
+describe("buildPagesWranglerConfig", () => {
+  it("binds Pages Functions to the backend Worker", () => {
+    const config = buildPagesWranglerConfig("rin-web", "rin-server");
+
+    expect(config).toContain('name = "rin-web"');
+    expect(config).toContain('pages_build_output_dir = "../dist/client"');
+    expect(config).toContain('binding = "RIN_API"');
+    expect(config).toContain('service = "rin-server"');
+    expect(config).not.toContain("[assets]");
+  });
+});
+
+describe("includesPagesProject", () => {
+  it("recognizes Wrangler's JSON display field", () => {
+    expect(includesPagesProject([{ "Project Name": "rin-client" }], "rin-client")).toBe(true);
+    expect(includesPagesProject([{ "Project Name": "another-site" }], "rin-client")).toBe(false);
+  });
+});
+
+describe("buildDefaultR2BucketName", () => {
+  it("derives an isolated valid bucket name from the Worker", () => {
+    expect(buildDefaultR2BucketName("Rin_Server-pr-12")).toBe("rin-server-pr-12-objects");
+  });
+});
 
 describe("collectWorkerSecrets", () => {
   it("includes supported non-empty worker secrets", () => {

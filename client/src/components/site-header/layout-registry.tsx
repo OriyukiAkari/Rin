@@ -1,4 +1,4 @@
-import { normalizeHeaderLayout, type HeaderLayoutOption } from "./layout-options";
+import { normalizeHeaderLayout, type HeaderLayoutOption } from "@rin/config";
 import { classicLayoutDefinition } from "./layouts/classic-layout";
 import { compactLayoutDefinition } from "./layouts/compact-layout";
 import type { HeaderLayoutRegistry } from "./layout-types";

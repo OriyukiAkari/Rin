@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach, afterEach } from "bun:test";
 import type { Database } from "bun:sqlite";
-import { buildServerConfigResponse, resolveWebhookConfig } from "../config-helpers";
+import { buildServerConfigResponse, persistRegularConfig, resolveWebhookConfig } from "../config-helpers";
 import { cleanupTestDB, createMockDB } from "../../../tests/fixtures";
 
 describe("buildServerConfigResponse", () => {
@@ -102,5 +102,34 @@ describe("resolveWebhookConfig", () => {
 
         expect(config.webhookUrl).toBe("https://override.example.com/webhook");
         expect(config.webhookMethod).toBe("GET");
+    });
+});
+
+describe("persistRegularConfig", () => {
+    it("normalizes registered values before storing them", async () => {
+        const writes: Array<[string, unknown]> = [];
+        await persistRegularConfig({
+            async all() { return new Map(); },
+            async set(key, value) { writes.push([key, value]); },
+            async save() {},
+        }, {
+            "comment.enabled": "false",
+            "site.page_size": "12",
+        }, "client");
+
+        expect(writes).toEqual([
+            ["comment.enabled", false],
+            ["site.page_size", 12],
+        ]);
+    });
+
+    it("rejects a registered key written to the wrong scope", async () => {
+        await expect(persistRegularConfig({
+            async all() { return new Map(); },
+            async set() {},
+            async save() {},
+        }, {
+            "ai_summary.provider": "openai",
+        }, "client")).rejects.toThrow("does not belong to the client scope");
     });
 });

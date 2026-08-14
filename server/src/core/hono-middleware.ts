@@ -1,40 +1,10 @@
 // Hono middleware for Rin server
 import { createMiddleware } from "hono/factory";
 import { getCookie, setCookie } from "hono/cookie";
-import { drizzle } from "drizzle-orm/d1";
-import type { AppContext, Variables, JWTUtils, OAuth2Utils } from "./hono-types";
+import type { AppContext, Variables, OAuth2Utils } from "./hono-types";
 import { eq } from "drizzle-orm";
 import { profileAsync } from "./server-timing";
-
-// Lazy initialization container
-class LazyInitContainer {
-    private env: Env;
-    private instances: Map<string, any> = new Map();
-    private initializing: Map<string, Promise<any>> = new Map();
-
-    constructor(env: Env) {
-        this.env = env;
-    }
-
-    async get<T>(key: string, factory: () => Promise<T>): Promise<T> {
-        if (this.instances.has(key)) {
-            return this.instances.get(key);
-        }
-
-        if (this.initializing.has(key)) {
-            return this.initializing.get(key);
-        }
-
-        const initPromise = factory().then(instance => {
-            this.instances.set(key, instance);
-            this.initializing.delete(key);
-            return instance;
-        });
-
-        this.initializing.set(key, initPromise);
-        return initPromise;
-    }
-}
+import { createRuntimeServices } from "./runtime-services";
 
 // Create container per request
 export const initContainerMiddleware = createMiddleware<{
@@ -42,44 +12,19 @@ export const initContainerMiddleware = createMiddleware<{
     Variables: Variables;
 }>(async (c, next) => {
     await profileAsync(c, "init_container", async () => {
-        const container = new LazyInitContainer(c.env);
-
-        const db = await container.get('db', async () => profileAsync(c, "init_db", async () => {
-            const schema = await import('../db/schema');
-            return drizzle(c.env.DB, { schema });
-        }));
-
-        const cache = await container.get('cache', async () => profileAsync(c, "init_cache", async () => {
-            const { CacheImpl } = await import('../utils/cache');
-            const clientConfig = await container.get('clientConfig', async () => profileAsync(c, "init_client_config", async () => {
-                const { CacheImpl } = await import('../utils/cache');
-                return new CacheImpl(db, c.env, "client.config");
-            }));
-            return new CacheImpl(db, c.env, "cache", undefined, clientConfig);
-        }));
-
-        const serverConfig = await container.get('serverConfig', async () => profileAsync(c, "init_server_config", async () => {
-                const { CacheImpl } = await import('../utils/cache');
-                return new CacheImpl(db, c.env, "server.config", "database");
-            }));
-
-        const clientConfig = await container.get('clientConfig', async () => profileAsync(c, "init_client_config", async () => {
-                const { CacheImpl } = await import('../utils/cache');
-                return new CacheImpl(db, c.env, "client.config");
-            }));
-
-        const jwt = await container.get('jwt', async () => profileAsync(c, "init_jwt", async () => {
+        const { db, cache, clientConfig, serverConfig } = createRuntimeServices(c.env);
+        const jwt = await profileAsync(c, "init_jwt", async () => {
             const { default: createJWT } = await import('../utils/jwt');
             const secret = c.env.JWT_SECRET;
             if (!secret) {
                 throw new Error('JWT_SECRET is not set');
             }
             return createJWT(secret);
-        }));
+        });
 
         let oauth2: OAuth2Utils | undefined = undefined;
         if (c.env.RIN_GITHUB_CLIENT_ID && c.env.RIN_GITHUB_CLIENT_SECRET) {
-            oauth2 = await container.get('oauth2', async () => profileAsync(c, "init_oauth2", async () => {
+            oauth2 = await profileAsync(c, "init_oauth2", async () => {
                     const { createOAuthPlugin, GitHubProvider } = await import('../utils/oauth');
                     return createOAuthPlugin({
                         GitHub: new GitHubProvider({
@@ -87,7 +32,7 @@ export const initContainerMiddleware = createMiddleware<{
                             clientSecret: c.env.RIN_GITHUB_CLIENT_SECRET
                         })
                     });
-                }));
+                });
         }
 
         c.set('db', db);

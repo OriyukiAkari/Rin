@@ -163,20 +163,28 @@ jobs:
           REPO_PAGE_SIZE: ${{ vars.PAGE_SIZE }}
           REPO_RSS_ENABLE: ${{ vars.RSS_ENABLE }}
           REPO_WORKER_NAME: ${{ vars.WORKER_NAME }}
+          REPO_PAGES_PROJECT_NAME: ${{ vars.PAGES_PROJECT_NAME }}
           REPO_DB_NAME: ${{ vars.DB_NAME }}
+          REPO_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           PR_NUMBER="${{ needs.prepare.outputs.pr_number }}"
           if [[ "${{ needs.prepare.outputs.is_production }}" == "true" ]]; then
             echo "worker_name=${REPO_WORKER_NAME:-rin-server}" >> $GITHUB_OUTPUT
+            echo "pages_project_name=${REPO_PAGES_PROJECT_NAME:-rin-client}" >> $GITHUB_OUTPUT
+            echo "pages_branch=${REPO_DEFAULT_BRANCH:-main}" >> $GITHUB_OUTPUT
             echo "db_name=${REPO_DB_NAME:-rin}" >> $GITHUB_OUTPUT
             echo "name=${REPO_NAME:-Rin}" >> $GITHUB_OUTPUT
           elif [[ "$PR_NUMBER" != "0" ]]; then
             # PR Preview uses -pr-<number> suffix
             echo "worker_name=${REPO_WORKER_NAME:-rin-server}-pr-${PR_NUMBER}" >> $GITHUB_OUTPUT
+            echo "pages_project_name=${REPO_PAGES_PROJECT_NAME:-rin-client}" >> $GITHUB_OUTPUT
+            echo "pages_branch=pr-${PR_NUMBER}" >> $GITHUB_OUTPUT
             echo "db_name=${REPO_DB_NAME:-rin-preview}" >> $GITHUB_OUTPUT
             echo "name=${REPO_NAME:-Rin} (PR #${PR_NUMBER})" >> $GITHUB_OUTPUT
           else
             echo "worker_name=${REPO_WORKER_NAME:-rin-server}-preview" >> $GITHUB_OUTPUT
+            echo "pages_project_name=${REPO_PAGES_PROJECT_NAME:-rin-client}" >> $GITHUB_OUTPUT
+            echo "pages_branch=preview" >> $GITHUB_OUTPUT
             echo "db_name=${REPO_DB_NAME:-rin-preview}" >> $GITHUB_OUTPUT
             echo "name=${REPO_NAME:-Rin} (Preview)" >> $GITHUB_OUTPUT
           fi
@@ -192,6 +200,9 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           WORKER_NAME: ${{ steps.config.outputs.worker_name }}
+          PAGES_PROJECT_NAME: ${{ steps.config.outputs.pages_project_name }}
+          PAGES_PRODUCTION_BRANCH: ${{ github.event.repository.default_branch || 'main' }}
+          PAGES_PREVIEW_BRANCH: ${{ steps.config.outputs.pages_branch }}
           DB_NAME: ${{ steps.config.outputs.db_name }}
           NAME: ${{ steps.config.outputs.name }}
           DESCRIPTION: ${{ steps.config.outputs.description || 'A lightweight personal blogging system' }}
@@ -210,6 +221,7 @@ jobs:
           S3_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY || '' }}
           RIN_GITHUB_CLIENT_ID: ${{ secrets.RIN_GITHUB_CLIENT_ID || '' }}
           RIN_GITHUB_CLIENT_SECRET: ${{ secrets.RIN_GITHUB_CLIENT_SECRET || '' }}
+          RIN_GITHUB_ADMIN_ID: ${{ secrets.RIN_GITHUB_ADMIN_ID || '' }}
           ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
           ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
           JWT_SECRET: ${{ secrets.JWT_SECRET || '' }}
@@ -217,6 +229,9 @@ jobs:
           RSS_TITLE: ${{ vars.RSS_TITLE || '' }}
           RSS_DESCRIPTION: ${{ vars.RSS_DESCRIPTION || '' }}
           CACHE_STORAGE_MODE: ${{ vars.CACHE_STORAGE_MODE || 's3' }}
+          SITE_URL: ${{ vars.SITE_URL || '' }}
+          CORS_ALLOWED_ORIGINS: ${{ vars.CORS_ALLOWED_ORIGINS || '' }}
+          VISIT_RETENTION_DAYS: ${{ vars.VISIT_RETENTION_DAYS || '30' }}
         run: |
           set -euo pipefail
           if [[ "${{ needs.prepare.outputs.is_production }}" == "true" ]]; then

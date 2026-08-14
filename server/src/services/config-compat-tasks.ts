@@ -2,7 +2,7 @@ import { desc, eq } from "drizzle-orm";
 import type { CacheImpl, DB } from "../core/hono-types";
 import { feeds } from "../db/schema";
 import { syncFeedAISummaryQueueState } from "./feed-ai-summary";
-import { clearFeedCache } from "./feed";
+import { clearFeedCache } from "./clear-feed-cache";
 import { contentHasImagesMissingMetadata } from "../utils/image";
 import { getAIConfig } from "../utils/db-config";
 

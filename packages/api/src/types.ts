@@ -3,6 +3,7 @@
 // ============================================================================
 
 // Common types
+export type { AIConfig } from "@rin/config";
 export interface ApiResponse<T> {
   data?: T;
   error?: {
@@ -262,19 +263,120 @@ export interface MomentListResponse {
 export type ConfigType = 'client' | 'server';
 
 export interface ConfigResponse {
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
-// ============================================================================
-// AI Config Types
-// ============================================================================
+export interface SettingsConfigResponse {
+  clientConfig: ConfigResponse;
+  serverConfig: ConfigResponse;
+}
 
-export interface AIConfig {
-  enabled: boolean;
-  provider: string;
-  model: string;
-  api_key: string;
-  api_url: string;
+export interface LocalizedMessage {
+  key: string;
+  values?: Record<string, string | number | boolean>;
+}
+
+export interface ConfigHealthItem {
+  id: string;
+  title: LocalizedMessage;
+  status: "success" | "warning" | "danger";
+  configured: boolean;
+  impact: LocalizedMessage;
+  summary: LocalizedMessage;
+  suggestion?: LocalizedMessage;
+  details?: LocalizedMessage[];
+}
+
+export interface ConfigHealthResponse {
+  generatedAt: string;
+  summary: Record<"success" | "warning" | "danger", number>;
+  items: ConfigHealthItem[];
+}
+
+export type AISummaryStatus = "idle" | "pending" | "processing" | "completed" | "failed";
+
+export interface QueueStatusItem {
+  id: number;
+  title: string | null;
+  aiSummaryStatus: AISummaryStatus;
+  aiSummaryError: string;
+  updatedAt: string;
+  createdAt: string;
+}
+
+export interface QueueStatusResponse {
+  queueConfigured: boolean;
+  generatedAt: string;
+  summary: Record<AISummaryStatus, number>;
+  items: QueueStatusItem[];
+}
+
+export interface QueueTaskActionResponse {
+  success: boolean;
+}
+
+export interface CompatTasksResponse {
+  generatedAt: string;
+  aiSummary: {
+    enabled: boolean;
+    queueConfigured: boolean;
+    eligible: number;
+    forceEligible: number;
+  };
+  blurhash: { eligible: number };
+}
+
+export interface CompatAISummaryActionResponse {
+  queued: number;
+  skipped: number;
+  forced: boolean;
+}
+
+export interface CompatBlurhashCandidate {
+  id: number;
+  title: string | null;
+  content: string;
+}
+
+export interface CompatBlurhashCandidatesResponse {
+  generatedAt: string;
+  items: CompatBlurhashCandidate[];
+}
+
+export interface CompatBlurhashApplyResponse {
+  updated: boolean;
+}
+
+export interface TestAIRequest {
+  provider?: string;
+  model?: string;
+  api_url?: string;
+  api_key?: string;
+  testPrompt?: string;
+}
+
+export interface TestAIResponse {
+  success: boolean;
+  response?: string;
+  error?: string;
+  details?: string;
+  provider?: string;
+  model?: string;
+}
+
+export interface TestWebhookRequest {
+  webhook_url?: string;
+  "webhook.method"?: string;
+  "webhook.content_type"?: string;
+  "webhook.headers"?: string;
+  "webhook.body_template"?: string;
+  test_message?: string;
+}
+
+export interface TestWebhookResponse {
+  success: boolean;
+  error?: string;
+  details?: string;
 }
 
 // ============================================================================
@@ -334,6 +436,7 @@ export const API_PATHS = {
   COMMENT_LIST: (feedId: number) => `/api/comment/${feedId}`,
   COMMENT_CREATE: (feedId: number) => `/api/comment/${feedId}`,
   COMMENT_DELETE: (id: number) => `/api/comment/${id}`,
+  COMMENT_APPROVE: (id: number) => `/api/comment/approve/${id}`,
 
   // Friend
   FRIEND_LIST: '/api/friend',
@@ -348,29 +451,34 @@ export const API_PATHS = {
   MOMENTS_DELETE: (id: number) => `/api/moments/${id}`,
 
   // Config
-  CONFIG_GET: (type: ConfigType) => `/config/${type}`,
-  CONFIG_UPDATE: (type: ConfigType) => `/config/${type}`,
-  CONFIG_CLEAR_CACHE: '/config/cache',
-
-  // AI Config (deprecated - use CONFIG_GET/CONFIG_UPDATE with 'server' type instead)
-  /** @deprecated Use CONFIG_GET('server') instead. AI config is now part of server config. */
-  AI_CONFIG_GET: '/ai-config',
-  /** @deprecated Use CONFIG_UPDATE('server', {...}) instead. AI config is now part of server config. */
-  AI_CONFIG_UPDATE: '/ai-config',
+  CONFIG_ALL: '/api/config',
+  CONFIG_GET: (type: ConfigType) => `/api/config/${type}`,
+  CONFIG_UPDATE: (type: ConfigType) => `/api/config/${type}`,
+  CONFIG_CLEAR_CACHE: '/api/config/cache',
+  CONFIG_HEALTH: '/api/config/health',
+  CONFIG_QUEUE_STATUS: '/api/config/queue-status',
+  CONFIG_QUEUE_RETRY: (feedId: number) => `/api/config/queue-status/${feedId}/retry`,
+  CONFIG_QUEUE_DELETE: (feedId: number) => `/api/config/queue-status/${feedId}`,
+  CONFIG_COMPAT_TASKS: '/api/config/compat-tasks',
+  CONFIG_COMPAT_AI: '/api/config/compat-tasks/ai-summary',
+  CONFIG_COMPAT_BLURHASH: '/api/config/compat-tasks/blurhash',
+  CONFIG_COMPAT_BLURHASH_APPLY: (feedId: number) => `/api/config/compat-tasks/blurhash/${feedId}`,
+  CONFIG_TEST_AI: '/api/config/test-ai',
+  CONFIG_TEST_WEBHOOK: '/api/config/test-webhook',
 
   // Storage
-  STORAGE_UPLOAD: '/storage',
+  STORAGE_UPLOAD: '/api/storage',
 
   // Favicon
-  FAVICON_GET: '/favicon',
-  FAVICON_GET_ORIGINAL: '/favicon/original',
-  FAVICON_UPLOAD: '/favicon',
+  FAVICON_GET: '/api/favicon',
+  FAVICON_GET_ORIGINAL: '/api/favicon/original',
+  FAVICON_UPLOAD: '/api/favicon',
 
   // Search
-  SEARCH: (keyword: string) => `/search/${encodeURIComponent(keyword)}`,
+  SEARCH: (keyword: string) => `/api/search/${encodeURIComponent(keyword)}`,
 
   // WordPress
-  WP_IMPORT: '/wp',
+  WP_IMPORT: '/api/wp',
 
   // RSS
   RSS_GET: (name: string) => `/${encodeURIComponent(name)}`,

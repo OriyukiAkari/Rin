@@ -62,12 +62,6 @@ name = ${toml(env.WORKER_NAME || "rin-server")}
 main = "server/src/_worker.ts"
 compatibility_date = "2026-01-20"
 
-[assets]
-directory = "./dist/client"
-binding = "ASSETS"
-run_worker_first = true
-not_found_handling = "single-page-application"
-
 [triggers]
 crons = ["*/20 * * * *"]
 
@@ -86,6 +80,9 @@ CACHE_STORAGE_MODE = ${toml(env.CACHE_STORAGE_MODE || "s3")}
 SITE_URL = ${toml(env.SITE_URL)}
 CORS_ALLOWED_ORIGINS = ${toml(env.CORS_ALLOWED_ORIGINS)}
 VISIT_RETENTION_DAYS = ${toml(env.VISIT_RETENTION_DAYS || "30")}
+
+[ai]
+binding = "AI"
 
 [[d1_databases]]
 binding = "DB"
@@ -128,9 +125,8 @@ RIN_GITHUB_ADMIN_ID=${env.RIN_GITHUB_ADMIN_ID || ""}
 JWT_SECRET=${env.JWT_SECRET}
 ADMIN_USERNAME=${env.ADMIN_USERNAME || ""}
 ADMIN_PASSWORD=${env.ADMIN_PASSWORD || ""}
-${env.R2_BUCKET_NAME ? "" : `S3_ACCESS_KEY_ID=${env.S3_ACCESS_KEY_ID}
-S3_SECRET_ACCESS_KEY=${env.S3_SECRET_ACCESS_KEY}
-`}
+S3_ACCESS_KEY_ID=${env.S3_ACCESS_KEY_ID || ""}
+S3_SECRET_ACCESS_KEY=${env.S3_SECRET_ACCESS_KEY || ""}
 `,
   );
 

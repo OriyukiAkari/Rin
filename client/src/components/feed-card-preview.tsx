@@ -1,6 +1,6 @@
 import { attachImageMetadataToUrl } from "../utils/image-upload";
 import { FeedCard, type FeedCardProps } from "./feed_card";
-import { type FeedCardVariant } from "./feed-card-options";
+import { type FeedCardVariant } from "@rin/config";
 import { SettingsPreviewCard } from "./settings-preview-card";
 
 const PREVIEW_IMAGE_URL = attachImageMetadataToUrl(

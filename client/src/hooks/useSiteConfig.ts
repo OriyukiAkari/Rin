@@ -1,7 +1,6 @@
 import { useContext } from "react";
 import { ClientConfigContext } from "../state/config";
-import { normalizeFeedCardVariant } from "../components/feed-card-options";
-import { normalizeFeedLayout } from "../components/feed-layout-options";
+import { normalizeFeedCardVariant, normalizeFeedLayout } from "@rin/config";
 
 // Site configuration keys
 export const SITE_CONFIG_KEYS = {

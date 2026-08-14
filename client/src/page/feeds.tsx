@@ -1,8 +1,8 @@
 import { useContext, useEffect, useRef, useState } from "react"
 import { Helmet } from 'react-helmet'
 import { Link, useSearch } from "wouter"
+import { Waiting } from "@rin/ui"
 import { FeedCard } from "../components/feed_card"
-import { Waiting } from "../components/loading"
 import { client } from "../app/runtime"
 import { ProfileContext } from "../state/profile"
 

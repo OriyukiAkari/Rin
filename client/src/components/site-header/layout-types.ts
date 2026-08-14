@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import type { Profile } from "../../state/profile";
-import type { HeaderBehaviorOption, HeaderLayoutOption } from "./layout-options";
+import type { HeaderBehaviorOption, HeaderLayoutOption } from "@rin/config";
 import type { SiteHeaderConfig } from "./shared";
 
 export type HeaderLayoutRenderProps = {

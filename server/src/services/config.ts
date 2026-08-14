@@ -356,8 +356,8 @@ export function ConfigService(): Hono {
         const { regularConfig: regularServerConfig, aiConfigUpdates } = splitConfigPayload(nextServerConfig);
 
         await Promise.all([
-            persistRegularConfig(clientConfig, regularClientConfig),
-            persistRegularConfig(serverConfig, regularServerConfig),
+            persistRegularConfig(clientConfig, regularClientConfig, "client"),
+            persistRegularConfig(serverConfig, regularServerConfig, "server"),
         ]);
 
         if (Object.keys(aiConfigUpdates).length > 0) {
@@ -386,7 +386,7 @@ export function ConfigService(): Hono {
         const { regularConfig, aiConfigUpdates } = splitConfigPayload(body);
         
         const config = type === 'server' ? serverConfig : clientConfig;
-        await persistRegularConfig(config, regularConfig);
+        await persistRegularConfig(config, regularConfig, type);
         
         if (Object.keys(aiConfigUpdates).length > 0) {
             await setAIConfig(serverConfig, aiConfigUpdates);

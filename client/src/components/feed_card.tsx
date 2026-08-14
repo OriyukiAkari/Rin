@@ -6,7 +6,7 @@ import { useEffect, useRef } from "react";
 import { drawBlurhashToCanvas } from "../utils/blurhash";
 import { parseImageUrlMetadata } from "../utils/image-upload";
 import { useImageLoadState } from "../utils/use-image-load-state";
-import { type FeedCardVariant, normalizeFeedCardVariant } from "./feed-card-options";
+import { type FeedCardVariant, normalizeFeedCardVariant } from "@rin/config";
 import { useSiteConfig } from "../hooks/useSiteConfig";
 
 function FeedCardImage({ src, variant }: { src: string; variant: FeedCardVariant }) {

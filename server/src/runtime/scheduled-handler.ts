@@ -1,19 +1,13 @@
-import { drizzle } from "drizzle-orm/d1";
-import { CacheImpl } from "../utils/cache";
 import { cleanupRateLimits } from "../utils/rate-limit";
 import { lt } from "drizzle-orm";
+import { createRuntimeServices } from "../core/runtime-services";
 
 export async function handleScheduled(
   _controller: ScheduledController | null,
   env: Env,
   ctx: ExecutionContext,
 ) {
-  const schema = await import("../db/schema");
-  const db = drizzle(env.DB, { schema });
-
-  const serverConfig = new CacheImpl(db, env, "server.config", "database");
-  const clientConfig = new CacheImpl(db, env, "client.config");
-  const cache = new CacheImpl(db, env, "cache", undefined, clientConfig);
+  const { db, cache, clientConfig, serverConfig } = createRuntimeServices(env);
 
   const { friendCrontab } = await import("../services/friends");
   const { rssCrontab } = await import("../services/rss");

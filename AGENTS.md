@@ -10,8 +10,8 @@ bun dev:server            # Server only (Wrangler dev server on port 11498)
 bun dev:cron              # Server with cron triggers enabled
 
 # Building
-bun run build             # Build all workspaces (turbo)
-bun run check             # TypeScript type check (turbo)
+bun run build             # Build the Pages frontend and Worker bundle
+bun run check             # TypeScript checks for every workspace
 
 # Database (using Rin CLI)
 bun run db:generate       # Generate Drizzle migrations
@@ -19,12 +19,11 @@ bun run db:migrate        # Run local database migrations
 
 # Formatting
 bun run format:check      # Check formatting
-bun run format:write      # Fix formatting
 
 # Deployment (using Rin CLI)
 bun run deploy            # Deploy both frontend (Pages) and backend (Workers)
 bun run deploy:server     # Deploy backend only
- bun run deploy:client     # Deploy frontend only
+bun run deploy:client     # Deploy frontend only
 
 # Release (using Rin CLI)
 bun run release <version> # Create a new release (patch/minor/major/x.y.z)
@@ -32,7 +31,7 @@ bun run release <version> # Create a new release (patch/minor/major/x.y.z)
 # Testing
 bun run test              # Run all tests (client + server)
 bun run test:server       # Run server tests only
- bun run test:coverage     # Run tests with coverage report
+bun run test:coverage     # Run tests with coverage report
 ```
 
 ## Rin CLI
@@ -51,15 +50,17 @@ This repository is a product monorepo, not a framework monorepo.
 
 - `rin` should learn from `~/projects/rine` on module boundaries and type discipline.
 - `rin` should NOT blindly copy `rine`'s `contracts/core/renderer/adapters/apps` layout.
-- The current repository still centers around a concrete app: React frontend, Cloudflare Worker backend, shared API package, and local CLI tooling.
+- The current repository centers around one concrete Cloudflare product: a React frontend on Pages, a Worker backend, D1, R2, shared packages, and local CLI tooling.
 - If a change improves directory symmetry but does not improve dependency boundaries, it is usually the wrong refactor.
 
 ### Current Reality
 
 - `client/` is the web application, not a reusable package.
 - `server/` is the Worker application, not a generic framework core.
-- `packages/api/` is the only stable shared package today.
-- `packages/ui/` exists in the tree but is not yet a real workspace package; treat it as incomplete work until it has its own `package.json`, tsconfig, exports, and consumers.
+- `packages/api/` owns transport contracts and canonical API paths.
+- `packages/config/` owns configuration definitions, defaults, scopes, and normalization.
+- `packages/ui/` is a real workspace package for app-agnostic React primitives.
+- `pages/` owns the narrow Pages Functions gateway; it must not absorb backend business logic.
 - `cli/` is an engineering tool for this repo, not a runtime dependency of the product.
 
 ### Refactor Direction
@@ -68,20 +69,17 @@ When restructuring, prefer this target shape over a direct clone of `rine`:
 
 ```text
 rin/
-├── apps/
-│   ├── web/            # current client app
-│   └── worker/         # current server app
+├── client/             # React/Vite app deployed to Pages
+├── pages/              # Pages Functions service-binding gateway
+├── server/             # Worker app using D1 and R2
 ├── packages/
 │   ├── api/            # shared request/response types and schemas
 │   ├── ui/             # real reusable UI primitives and markdown-related UI
-│   ├── web-core/       # app shell, providers, routing, layout composition
-│   ├── server-core/    # app assembly, middleware, route registration, env typing
 │   └── config/         # shared config keys, defaults, parsing, client-safe views
-├── tools/
-│   └── cli/            # current CLI moved only when boundaries are stable
+└── cli/                # product development and deployment tooling
 ```
 
-This is a direction, not a mandate to rename everything immediately.
+Do not add `web-core` or `server-core` packages unless a concrete second consumer appears.
 
 ## Refactor Guardrails
 

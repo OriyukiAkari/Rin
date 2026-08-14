@@ -1,4 +1,4 @@
-import type { AIConfig } from "@rin/api";
+import type { AIConfig } from "@rin/config";
 import { AI_CONFIG_PREFIX, DEFAULT_AI_CONFIG } from "@rin/config";
 
 type ConfigReader = {

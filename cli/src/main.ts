@@ -32,7 +32,7 @@ export async function runCli(rawArgs: string[]) {
   }
 
   if (args.includes("-v") || args.includes("--version")) {
-    console.log("rin-cli v1.0.0");
+    console.log("rin-cli v1.1.0");
     return;
   }
 

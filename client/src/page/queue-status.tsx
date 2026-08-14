@@ -1,11 +1,10 @@
-import { SettingsBadge, SettingsCard, SettingsCardBody, SettingsCardHeader } from "@rin/ui";
+import { Button, SettingsBadge, SettingsCard, SettingsCardBody, SettingsCardHeader } from "@rin/ui";
 import { useEffect, useMemo, useState } from "react";
 import { Helmet } from "react-helmet";
 import { useTranslation } from "react-i18next";
 import ReactLoading from "react-loading";
 import type { QueueStatusItem } from "../api/client";
 import { client } from "../app/runtime";
-import { Button } from "../components/button";
 import { useAlert, useConfirm } from "../components/dialog";
 import { useSiteConfig } from "../hooks/useSiteConfig";
 

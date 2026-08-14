@@ -23,6 +23,37 @@ which automatically generates release notes from commit messages.
 
 ### Security
 
+## [v1.1.0] - 2026-08-14
+
+### Added
+
+- Added a Pages Functions gateway with a `RIN_API` service binding and a narrow `_routes.json`
+  route gate for API, RSS, and favicon traffic.
+- Added an authoritative shared configuration registry and expanded shared API contracts.
+- Added durable v1.0 baseline and v1.1 architecture documents.
+
+### Changed
+
+- Cloudflare Pages is now the sole frontend host; the Worker is a backend-only service using
+  D1, R2, queues, cron triggers, and optional Workers AI bindings.
+- Unified fetch, queue, and scheduled runtime dependency creation.
+- Split the client API, feed/search/WordPress services, article comments, and settings state
+  orchestration by responsibility.
+- Client components now consume `@rin/ui` and `@rin/config` directly; all workspaces participate
+  in the root type-check pipeline.
+- Deployment now creates/deploys Pages separately and binds it to the deployed Worker.
+
+### Removed
+
+- Removed Worker Assets frontend hosting, obsolete client UI forwarding files, legacy runtime
+  containers and config helpers, the deprecated AI config API, and unused client dependencies.
+
+### Fixed
+
+- Fixed inconsistent `/api` path contracts, duplicated runtime initialization, configuration
+  default drift, and a deployment flow that built the frontend without actually deploying it
+  as part of the combined command.
+
 ## [v1.0.0] - 2026-08-14
 
 ### Added

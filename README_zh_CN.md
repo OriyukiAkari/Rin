@@ -95,16 +95,17 @@ bun run deploy:client
 **可选的环境变量：**
 
 - `WORKER_NAME` - 后端工作进程名称（默认值：`rin-server`）
-- `PAGES_NAME` - 前端页面名称（默认值：`rin-client`）
+- `PAGES_PROJECT_NAME` - 前端 Pages 项目名称（默认值：`rin-client`）；`PAGES_NAME` 仍作为兼容别名保留
 - `DB_NAME` - D1 数据库名称（默认值：`rin`）
-- `R2_BUCKET_NAME` - R2 存储桶名称。设置后，部署会自动推导对应的 `S3_*` 配置；未设置时，不会自动选择任何 bucket。
+- `R2_BUCKET_NAME` - R2 存储桶名称（默认值：`<worker-name>-objects`）
 
 部署脚本将自动执行以下操作：
 
-- 自动检测并创建 D1 数据库如果不存在
-- 仅在显式设置 `R2_BUCKET_NAME` 时，自动推导对应的 `S3_*` 存储配置
+- 自动检测并创建 D1 数据库与 R2 对象存储桶
+- 从主 R2 存储桶推导兼容存储配置
 - 部署后端到 Workers
 - 构建前端并将其部署到 Pages
+- 通过 `RIN_API` Service Binding 将 Pages Functions 连接到 Worker
 - 运行数据库迁移
 
 ### GitHub Actions Workflows
@@ -123,7 +124,7 @@ bun run deploy:client
 
 **可选配置(Repository Settings → Secrets and variables → Variables):**
 
-- `WORKER_NAME`, `PAGES_NAME`, `DB_NAME` - 资源名称
+- `WORKER_NAME`, `PAGES_PROJECT_NAME`, `DB_NAME` - 资源名称
 - `NAME`, `DESCRIPTION`, `AVATAR` - 站点配置
 - `R2_BUCKET_NAME` - 要使用的特定 R2 存储桶
 

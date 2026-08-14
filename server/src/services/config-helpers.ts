@@ -1,8 +1,11 @@
 import {
   AI_CONFIG_KEYS,
   CLIENT_CONFIG_ENV_DEFAULTS,
+  CONFIG_DEFINITIONS,
   SENSITIVE_SERVER_CONFIG_FIELDS,
   WEBHOOK_URL_KEY,
+  isKnownConfigKey,
+  normalizeConfigValue,
 } from "@rin/config";
 import { getFrontendAIEnabled, readAIConfigFromMap } from "../utils/db-config";
 
@@ -164,9 +167,18 @@ export function splitConfigPayload(body: Record<string, unknown>) {
 export async function persistRegularConfig(
   config: ConfigMapLike,
   updates: Record<string, unknown>,
+  scope: "client" | "server",
 ) {
   for (const key in updates) {
-    await config.set(key, updates[key], false);
+    if (isKnownConfigKey(key)) {
+      if (CONFIG_DEFINITIONS[key].scope !== scope) {
+        throw new Error(`Config key ${key} does not belong to the ${scope} scope`);
+      }
+      await config.set(key, normalizeConfigValue(key, updates[key]), false);
+    } else {
+      // Keep unregistered legacy/plugin keys round-trippable during upgrades.
+      await config.set(key, updates[key], false);
+    }
   }
   await config.save();
 }

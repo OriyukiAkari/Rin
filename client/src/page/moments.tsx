@@ -11,7 +11,7 @@ import { useSearch } from "wouter"
 import { useAlert, useConfirm } from "../components/dialog"
 import Modal from "react-modal"
 import { MarkdownEditor } from "../components/markdown_editor"
-import { Waiting } from "../components/loading"
+import { Waiting } from "@rin/ui"
 import { MomentItem } from "../components/moment_item"
 
 interface Moment {

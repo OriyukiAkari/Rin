@@ -1,9 +1,9 @@
 import { useContext, useEffect, useRef, useState } from "react";
 import { ProfileContext } from "../state/profile";
-import { Padding } from "./padding";
+import { Padding } from "@rin/ui";
+import { normalizeHeaderBehavior, normalizeHeaderLayout } from "@rin/config";
 import { useSiteConfig } from "../hooks/useSiteConfig";
 import { getHeaderLayoutDefinition } from "./site-header/layout-registry";
-import { normalizeHeaderBehavior, normalizeHeaderLayout } from "./site-header/layout-options";
 
 export function Header({ children }: { children?: React.ReactNode }) {
   const profile = useContext(ProfileContext);

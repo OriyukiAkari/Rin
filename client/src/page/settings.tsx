@@ -1,38 +1,25 @@
-import { SearchableSelect, SettingsBadge, SettingsCard, SettingsCardBody, SettingsCardHeader, SettingsCardRow } from "@rin/ui";
-import { type ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
+import { Button, SearchableSelect, SettingsBadge, SettingsCard, SettingsCardBody, SettingsCardHeader, SettingsCardRow } from "@rin/ui";
+import {
+  FEED_CARD_VARIANTS,
+  FEED_LAYOUT_OPTIONS,
+  HEADER_BEHAVIOR_OPTIONS,
+  HEADER_LAYOUT_OPTIONS,
+  normalizeHeaderBehavior,
+  normalizeHeaderLayout,
+} from "@rin/config";
 import { Helmet } from "react-helmet";
 import { useTranslation } from "react-i18next";
 import ReactLoading from "react-loading";
 import Modal from "react-modal";
 import { client, oauth_url } from "../app/runtime";
-import { Button } from "../components/button";
 import { useAlert } from "../components/dialog.tsx";
 import { HeaderLayoutPreview } from "../components/site-header/layout-preview";
-import {
-  HEADER_BEHAVIOR_OPTIONS,
-  HEADER_LAYOUT_OPTIONS,
-  normalizeHeaderBehavior,
-  normalizeHeaderLayout,
-} from "../components/site-header/layout-options";
-import { FEED_CARD_VARIANTS, normalizeFeedCardVariant } from "../components/feed-card-options";
 import { FeedCardPreview } from "../components/feed-card-preview";
-import { FEED_LAYOUT_OPTIONS, normalizeFeedLayout } from "../components/feed-layout-options";
+import { useSettingsController } from "../features/settings/use-settings-controller";
 import { useSiteConfig } from "../hooks/useSiteConfig";
 import { applyThemeColor, normalizeThemeColor } from "../utils/theme-color";
 import { AISummarySettings } from "./settings-ai";
 import { ItemButton, ItemImageInput, ItemInput, ItemSwitch, ItemTitle, ItemWithUpload } from "./settings-items";
-import {
-  areSettingsDraftsEqual,
-  buildAIConfigDraftValue,
-  createSettingsConfigWrappers,
-  importWordPressFile,
-  loadSettingsConfigState,
-  mergeSessionConfig,
-  saveSettingsConfigState,
-  type SettingsDraft,
-  updateDraftConfig,
-  uploadFavicon,
-} from "./settings-helpers";
 
 import "../utils/thumb.css";
 
@@ -52,130 +39,33 @@ const THEME_COLOR_OPTIONS = [
 export function Settings() {
   const { t } = useTranslation();
   const siteConfig = useSiteConfig();
-  const [isOpen, setIsOpen] = useState(false);
-  const [msg, setMsg] = useState("");
-  const [msgList, setMsgList] = useState<{ title: string; reason: string }[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [testingWebhook, setTestingWebhook] = useState(false);
-  const [webhookTestMessage, setWebhookTestMessage] = useState("");
-  const [draft, setDraft] = useState<SettingsDraft>({ clientConfig: {}, serverConfig: {} });
-  const [initialDraft, setInitialDraft] = useState<SettingsDraft>({ clientConfig: {}, serverConfig: {} });
-  const [hasStoredAiApiKey, setHasStoredAiApiKey] = useState(false);
-  const ref = useRef(false);
-  const initialDraftRef = useRef<SettingsDraft>({ clientConfig: {}, serverConfig: {} });
   const { showAlert, AlertUI } = useAlert();
-
-  function getDraftThemeColor(nextDraft: SettingsDraft) {
-    return typeof nextDraft.clientConfig["theme.color"] === "string" ? nextDraft.clientConfig["theme.color"] : undefined;
-  }
-
-  useEffect(() => {
-    if (ref.current) return;
-    loadSettingsConfigState()
-      .then((state) => {
-        setDraft(state.draft);
-        setInitialDraft(state.draft);
-        initialDraftRef.current = state.draft;
-        setHasStoredAiApiKey(state.hasStoredAiApiKey);
-        mergeSessionConfig(state.draft.clientConfig);
-        applyThemeColor(getDraftThemeColor(state.draft));
-      })
-      .catch((err: any) => {
-        showAlert(t("settings.get_config_failed$message", { message: err.message }));
-      })
-      .finally(() => {
-        setLoading(false);
-      });
-    ref.current = true;
-
-    return () => {
-      applyThemeColor(getDraftThemeColor(initialDraftRef.current));
-    };
-  }, [showAlert, t]);
-
-  const { clientConfig, serverConfig } = useMemo(() => createSettingsConfigWrappers(draft), [draft]);
-  const aiValue = useMemo(() => buildAIConfigDraftValue(draft, hasStoredAiApiKey), [draft, hasStoredAiApiKey]);
-  const hasUnsavedChanges = !areSettingsDraftsEqual(draft, initialDraft);
-  const themeColorValue = normalizeThemeColor(String(clientConfig.get("theme.color") ?? "#fc466b"));
-  const feedLayoutValue = normalizeFeedLayout(String(clientConfig.get("feed.layout") ?? "list"));
-  const feedCardVariantValue = normalizeFeedCardVariant(String(clientConfig.get("feed.card_variant") ?? "default"));
-  const previewSiteName = String(clientConfig.get("site.name") ?? clientConfig.default("site.name") ?? "Rin");
-  const previewSiteAvatar = String(clientConfig.get("site.avatar") ?? clientConfig.default("site.avatar") ?? "");
-
-  function setConfigValue(type: "client" | "server", key: string, value: unknown) {
-    setDraft((current) => updateDraftConfig(current, type, key, value));
-  }
-
-  function handleReset() {
-    setDraft(initialDraft);
-    applyThemeColor(getDraftThemeColor(initialDraft));
-  }
-
-  async function handleSave() {
-    setSaving(true);
-    try {
-      const state = await saveSettingsConfigState(draft);
-      setDraft(state.draft);
-      setInitialDraft(state.draft);
-      initialDraftRef.current = state.draft;
-      setHasStoredAiApiKey(state.hasStoredAiApiKey || aiValue.apiKey.trim().length > 0);
-      mergeSessionConfig(state.draft.clientConfig);
-      window.dispatchEvent(new Event("storage"));
-      showAlert(t("settings.ai_summary.save_success"));
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      showAlert(t("settings.update_failed$message", { message }));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleFaviconChange(e: ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (file) {
-      await uploadFavicon(file, t, showAlert);
-    }
-  }
-
-  async function onFileChange(e: ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (file) {
-      const { data, error } = await importWordPressFile(file);
-      if (data) {
-        setMsg(t("settings.import_success$success$skipped", { success: data.success, skipped: data.skipped }));
-        setMsgList(data.skippedList);
-        setIsOpen(true);
-      } else if (error) {
-        showAlert(t("settings.import_failed$message", { message: error.value }));
-      }
-    }
-  }
-
-  async function handleTestWebhook() {
-    setTestingWebhook(true);
-    try {
-      const { data, error } = await client.config.testWebhook({
-        webhook_url: String(serverConfig.get("webhook_url") ?? ""),
-        "webhook.method": String(serverConfig.get("webhook.method") ?? ""),
-        "webhook.content_type": String(serverConfig.get("webhook.content_type") ?? ""),
-        "webhook.headers": String(serverConfig.get("webhook.headers") ?? ""),
-        "webhook.body_template": String(serverConfig.get("webhook.body_template") ?? ""),
-        test_message: webhookTestMessage,
-      });
-
-      if (error || !data?.success) {
-        const message = error?.value || data?.error || t("settings.webhook.test.failed");
-        const details = data?.details ? `\n${data.details}` : "";
-        showAlert(`${message}${details}`);
-        return;
-      }
-
-      showAlert(t("settings.webhook.test.success"));
-    } finally {
-      setTestingWebhook(false);
-    }
-  }
+  const {
+    aiValue,
+    clientConfig,
+    feedCardVariantValue,
+    feedLayoutValue,
+    handleFaviconChange,
+    handleReset,
+    handleSave,
+    handleTestWebhook,
+    hasUnsavedChanges,
+    isOpen,
+    loading,
+    msg,
+    msgList,
+    onFileChange,
+    previewSiteAvatar,
+    previewSiteName,
+    saving,
+    serverConfig,
+    setConfigValue,
+    setIsOpen,
+    setWebhookTestMessage,
+    testingWebhook,
+    themeColorValue,
+    webhookTestMessage,
+  } = useSettingsController(t, showAlert);
 
   return (
     <div className="flex w-full flex-col">

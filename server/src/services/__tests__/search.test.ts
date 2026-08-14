@@ -3,7 +3,7 @@ import type { Database } from "bun:sqlite";
 import type { Hono } from "hono";
 import type { Variables } from "../../core/hono-types";
 import { cleanupTestDB, setupTestApp } from "../../../tests/fixtures";
-import { SearchService } from "../feed";
+import { SearchService } from "../search";
 
 describe("SearchService visibility and cache isolation", () => {
   let sqlite: Database;

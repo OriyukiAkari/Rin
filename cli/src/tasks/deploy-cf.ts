@@ -4,6 +4,8 @@ import stripIndent from "strip-indent";
 import { fixTopField, getMigrationFileVersion, getMigrationVersion, isInfoExist, updateMigrationVersion } from "../lib/db-migration";
 const bunExec = process.execPath;
 const toml = (value: string | undefined) => JSON.stringify(value || "");
+const WORKER_CONFIG_PATH = "wrangler.toml";
+const PAGES_CONFIG_PATH = "pages/wrangler.toml";
 
 function env(name: string, defaultValue?: string, required = false) {
   const value = process.env[name] || defaultValue;
@@ -22,6 +24,18 @@ function requireCloudflareResourceName(value: string, label: string) {
   return value;
 }
 
+function requireR2BucketName(value: string) {
+  if (!/^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/.test(value)) {
+    throw new Error("R2_BUCKET_NAME must use 3-63 lowercase letters, numbers, or hyphens");
+  }
+  return value;
+}
+
+export function buildDefaultR2BucketName(workerName: string) {
+  const normalized = workerName.toLowerCase().replace(/_/g, "-").replace(/[^a-z0-9-]/g, "");
+  return `${normalized}-objects`.slice(0, 63).replace(/-+$/, "");
+}
+
 const WORKER_SECRET_KEYS = [
   "JWT_SECRET",
   "ADMIN_USERNAME",
@@ -35,6 +49,11 @@ const WORKER_SECRET_KEYS = [
 
 function isQueueAlreadyPresentError(stderr: string) {
   return stderr.includes("already exists") || stderr.includes("already taken") || stderr.includes("[code: 11009]");
+}
+
+function isResourceAlreadyPresentError(stderr: string) {
+  const message = stderr.toLowerCase();
+  return message.includes("already exists") || message.includes("already taken");
 }
 
 export function collectWorkerSecrets(source: Record<string, string | undefined> = process.env) {
@@ -71,15 +90,53 @@ async function syncWorkerSecrets(workerName: string) {
 }
 
 async function buildClient() {
-  const distIndex = Bun.file("./dist/client/index.html");
-  if (await distIndex.exists()) {
-    console.log("✅ Using pre-built client from ./dist/client");
-    return;
-  }
-
   console.log("🔨 Building client...");
   await $`cd client && ${bunExec} run build`.quiet();
   console.log("✅ Client built successfully");
+}
+
+export function buildPagesWranglerConfig(pagesName: string, workerName: string) {
+  return stripIndent(`
+    #:schema ../node_modules/wrangler/config-schema.json
+    name = ${toml(pagesName)}
+    pages_build_output_dir = "../dist/client"
+    compatibility_date = "2026-01-20"
+
+    [[services]]
+    binding = "RIN_API"
+    service = ${toml(workerName)}
+  `);
+}
+
+export function includesPagesProject(
+  projects: Array<{ "Project Name"?: string; name?: string }>,
+  pagesName: string,
+) {
+  return projects.some((project) => project["Project Name"] === pagesName || project.name === pagesName);
+}
+
+async function ensurePagesProject(pagesName: string, productionBranch: string) {
+  const result = await $`${bunExec} x wrangler pages project list --json --cwd pages`.quiet().nothrow();
+  if (result.exitCode !== 0) {
+    throw new Error(`Unable to list Cloudflare Pages projects: ${result.stderr.toString().trim()}`);
+  }
+
+  const projects = JSON.parse(result.stdout.toString()) as Array<{ "Project Name"?: string; name?: string }>;
+  if (includesPagesProject(projects, pagesName)) {
+    return;
+  }
+
+  await $`${bunExec} x wrangler pages project create ${pagesName} --production-branch ${productionBranch} --cwd pages`;
+}
+
+async function deployPagesClient(pagesName: string, workerName: string, preview: boolean, clientAlreadyBuilt = false) {
+  const productionBranch = renv("PAGES_PRODUCTION_BRANCH", "main");
+  const branch = preview ? renv("PAGES_PREVIEW_BRANCH", "preview") : productionBranch;
+
+  if (!clientAlreadyBuilt) await buildClient();
+  await Bun.write(PAGES_CONFIG_PATH, buildPagesWranglerConfig(pagesName, workerName));
+  await ensurePagesProject(pagesName, productionBranch);
+  await $`${bunExec} x wrangler pages deploy --cwd pages --branch ${branch}`;
 }
 
 type R2BucketInfo = {
@@ -145,20 +202,29 @@ async function resolveR2BucketInfo(r2BucketName: string) {
 }
 
 export async function runCloudflareDeploy(target: "all" | "server" | "client" = "all", preview = false) {
+  const workerName = requireCloudflareResourceName(renv("WORKER_NAME", "rin-server"), "WORKER_NAME");
+  const pagesName = requireCloudflareResourceName(
+    renv("PAGES_PROJECT_NAME", env("PAGES_NAME", "rin-client")),
+    "PAGES_PROJECT_NAME",
+  );
+
   if (target === "client") {
-    await buildClient();
-    await $`${bunExec} x wrangler pages deploy dist/client`;
+    await deployPagesClient(pagesName, workerName, preview);
     return;
   }
 
+  if (target === "all") {
+    await buildClient();
+  }
+
   const dbName = requireCloudflareResourceName(renv("DB_NAME", "rin"), "DB_NAME");
-  const workerName = requireCloudflareResourceName(renv("WORKER_NAME", "rin-server"), "WORKER_NAME");
   const taskQueueName = requireCloudflareResourceName(
     env("TASK_QUEUE_NAME", env("AI_SUMMARY_QUEUE_NAME", `${workerName}-tasks`)) ?? `${workerName}-tasks`,
     "TASK_QUEUE_NAME",
   );
-  const r2BucketNameValue = env("R2_BUCKET_NAME", "");
-  const r2BucketName = r2BucketNameValue ? requireCloudflareResourceName(r2BucketNameValue, "R2_BUCKET_NAME") : "";
+  const r2BucketName = requireR2BucketName(
+    renv("R2_BUCKET_NAME", buildDefaultR2BucketName(workerName)),
+  );
   const s3Endpoint = env("S3_ENDPOINT", "");
   const s3AccessHost = env("S3_ACCESS_HOST", "");
   const s3Bucket = env("S3_BUCKET", "");
@@ -191,25 +257,16 @@ export async function runCloudflareDeploy(target: "all" | "server" | "client" = 
     }
   }
 
-  if (target !== "server") {
-    await buildClient();
-  }
-
-  const serverDistIndex = Bun.file("./dist/server/_worker.js");
-  const hasServerBuild = await serverDistIndex.exists();
-  const serverMain = hasServerBuild ? "dist/server/_worker.js" : "server/src/_worker.ts";
+  const serverMain = "server/src/_worker.ts";
 
   await Bun.write(
-    "wrangler.toml",
+    WORKER_CONFIG_PATH,
     stripIndent(`
       #:schema node_modules/wrangler/config-schema.json
       name = ${toml(workerName)}
       main = ${toml(serverMain)}
       compatibility_date = "2026-01-20"
 
-      [assets]
-      directory = "./dist/client"
-      binding = "ASSETS"
       ${buildWranglerTriggersConfig(preview)}
       ${buildWranglerObservabilityConfig(preview)}
 
@@ -255,11 +312,19 @@ export async function runCloudflareDeploy(target: "all" | "server" | "client" = 
     process.exit(1);
   }
 
+  const bucketCreate = await $`${bunExec} x wrangler r2 bucket create ${r2BucketName}`.quiet().nothrow();
+  if (bucketCreate.exitCode !== 0 && !isResourceAlreadyPresentError(bucketCreate.stderr.toString())) {
+    console.error(`Failed to create R2 bucket "${r2BucketName}"`);
+    console.error(stripIndent(bucketCreate.stdout.toString()));
+    console.error(stripIndent(bucketCreate.stderr.toString()));
+    process.exit(1);
+  }
+
   const listJson = (JSON.parse(await $`${bunExec} x wrangler d1 list --json`.quiet().text()) as Array<{ name: string; uuid: string }>).find(
     (item) => item.name === dbName,
   );
   if (listJson) {
-    await appendFile("wrangler.toml", stripIndent(`
+    await appendFile(WORKER_CONFIG_PATH, stripIndent(`
       [[d1_databases]]
       binding = "DB"
       database_name = ${toml(listJson.name)}
@@ -267,21 +332,19 @@ export async function runCloudflareDeploy(target: "all" | "server" | "client" = 
     `));
   }
 
-  await appendFile("wrangler.toml", stripIndent(`
+  await appendFile(WORKER_CONFIG_PATH, stripIndent(`
     [ai]
     binding = "AI"
   `));
 
-  await appendFile("wrangler.toml", buildWranglerQueueConfig(taskQueueName, preview));
+  await appendFile(WORKER_CONFIG_PATH, buildWranglerQueueConfig(taskQueueName, preview));
 
-  if (r2BucketName) {
-    await appendFile("wrangler.toml", stripIndent(`
-      [[r2_buckets]]
-      binding = "R2_BUCKET"
-      bucket_name = ${toml(r2BucketName)}
-      preview_bucket_name = ${toml(r2BucketName)}
-    `));
-  }
+  await appendFile(WORKER_CONFIG_PATH, stripIndent(`
+    [[r2_buckets]]
+    binding = "R2_BUCKET"
+    bucket_name = ${toml(r2BucketName)}
+    preview_bucket_name = ${toml(r2BucketName)}
+  `));
 
   const migrationVersion = await getMigrationVersion("remote", dbName);
   const infoExists = await isInfoExist("remote", dbName);
@@ -320,4 +383,5 @@ export async function runCloudflareDeploy(target: "all" | "server" | "client" = 
 
   await $`${bunExec} x wrangler deploy`;
   await syncWorkerSecrets(workerName);
+  await deployPagesClient(pagesName, workerName, preview, true);
 }

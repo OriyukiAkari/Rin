@@ -76,8 +76,12 @@ The deployment process takes approximately 3-5 minutes. You can view the deploym
 
 After deployment is complete, you can access your blog through the following addresses:
 
-- **Frontend**: `https://rin-client.pages.dev` (or the name you set in `PAGES_NAME`)
+- **Frontend and browser API origin**: `https://rin-client.pages.dev` (or the name set in `PAGES_PROJECT_NAME`)
 - **Backend API**: `https://rin-server.your-account-id.workers.dev`
+
+The browser uses the Pages address for both UI and `/api/*`. Pages Functions forward dynamic
+requests to the backend with the internal `RIN_API` service binding, so login cookies remain
+same-origin. The Worker address is useful for diagnostics and is not the normal browser entry.
 
 ### Step 5: First Login
 
@@ -151,7 +155,7 @@ If you want to log in with your GitHub account:
 3. Fill in the application information:
     - **Application name**: Rin Blog
     - **Homepage URL**: Your frontend page address
-    - **Authorization callback URL**: `https://your-worker-name.your-account-id.workers.dev/api/user/github/callback`
+    - **Authorization callback URL**: `https://your-pages-domain/api/user/github/callback`
 4. After creation, obtain the Client ID and Client Secret
 5. Add to GitHub Secrets:
     - `RIN_GITHUB_CLIENT_ID`

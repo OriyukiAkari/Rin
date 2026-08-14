@@ -2,10 +2,10 @@ import * as Switch from "@radix-ui/react-switch";
 import { type ChangeEvent, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import ReactLoading from "react-loading";
-import { Button } from "../components/button";
 import { useConfirm } from "../components/dialog";
 import { ImageUploadInput } from "../components/image-upload-input";
 import {
+  Button,
   SettingsCard,
   SettingsCardBody,
   SettingsCardHeader,

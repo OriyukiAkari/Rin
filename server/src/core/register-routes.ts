@@ -3,13 +3,15 @@ import { PasswordAuthService } from "../services/auth";
 import { CommentService } from "../services/comments";
 import { ConfigService } from "../services/config";
 import { FaviconService } from "../services/favicon";
-import { FeedService, SearchService, WordPressService } from "../services/feed";
+import { FeedService } from "../services/feed";
 import { FriendService } from "../services/friends";
 import { MomentsService } from "../services/moments";
 import { RSSService } from "../services/rss";
 import { BlobService, StorageService } from "../services/storage";
 import { TagService } from "../services/tag";
 import { UserService } from "../services/user";
+import { SearchService } from "../services/search";
+import { WordPressService } from "../services/wordpress-import";
 
 export function registerRoutes(app: RinApp) {
   app.get("/", (c) => c.text("Hi"));
