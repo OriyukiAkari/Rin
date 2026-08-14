@@ -82,7 +82,7 @@ export async function bindTagToPost(db: DB, feedId: number, tags: string[]) {
         await db.insert(feedHashtags).values({
             feedId: feedId,
             hashtagId: tagId
-        });
+        }).onConflictDoNothing();
     }
 }
 
@@ -95,11 +95,9 @@ async function getTagIdOrCreate(db: DB, name: string) {
     if (tag) {
         return tag.id;
     } else {
-        const result = await db.insert(hashtags).values({ name }).returning({ insertedId: hashtags.id });
-        if (result.length === 0) {
-            throw new Error('Failed to insert');
-        } else {
-            return result[0].insertedId;
-        }
+        await db.insert(hashtags).values({ name }).onConflictDoNothing();
+        const inserted = await getTagByName(db, name);
+        if (!inserted) throw new Error('Failed to insert tag');
+        return inserted.id;
     }
 }

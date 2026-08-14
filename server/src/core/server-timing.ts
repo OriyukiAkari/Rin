@@ -6,5 +6,6 @@ export async function profileAsync<T>(
   name: string,
   task: () => Promise<T> | T,
 ): Promise<T> {
+  if (!c.get("metric")) return await task();
   return wrapTime(c, name, Promise.resolve(task()));
 }

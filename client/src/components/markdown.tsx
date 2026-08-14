@@ -1,13 +1,25 @@
 import "katex/dist/katex.min.css";
 import React, { cloneElement, isValidElement, useEffect, useMemo, useRef } from "react";
 import ReactMarkdown from "react-markdown";
-import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { PrismLight as SyntaxHighlighter } from "react-syntax-highlighter";
 import {
   base16AteliersulphurpoolLight,
   vscDarkPlus,
 } from "react-syntax-highlighter/dist/esm/styles/prism";
+import bash from "react-syntax-highlighter/dist/esm/languages/prism/bash";
+import css from "react-syntax-highlighter/dist/esm/languages/prism/css";
+import javascript from "react-syntax-highlighter/dist/esm/languages/prism/javascript";
+import json from "react-syntax-highlighter/dist/esm/languages/prism/json";
+import jsx from "react-syntax-highlighter/dist/esm/languages/prism/jsx";
+import markdown from "react-syntax-highlighter/dist/esm/languages/prism/markdown";
+import markup from "react-syntax-highlighter/dist/esm/languages/prism/markup";
+import python from "react-syntax-highlighter/dist/esm/languages/prism/python";
+import sql from "react-syntax-highlighter/dist/esm/languages/prism/sql";
+import tsx from "react-syntax-highlighter/dist/esm/languages/prism/tsx";
+import typescript from "react-syntax-highlighter/dist/esm/languages/prism/typescript";
 import rehypeKatex from "rehype-katex";
 import rehypeRaw from "rehype-raw";
+import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import gfm from "remark-gfm";
 import remarkMermaid from "../remark/remarkMermaid";
 import { remarkAlert } from "remark-github-blockquote-alert";
@@ -23,6 +35,33 @@ import { useColorMode } from "../utils/darkModeUtils";
 import { parseImageUrlMetadata } from "../utils/image-upload";
 import { useImageLoadState } from "../utils/use-image-load-state";
 
+for (const [language, syntax] of Object.entries({
+  bash, css, html: markup, javascript, js: javascript, json, jsx, markdown,
+  python, sql, tsx, typescript, ts: typescript,
+})) {
+  SyntaxHighlighter.registerLanguage(language, syntax);
+}
+
+const markdownSanitizeSchema = {
+  ...defaultSchema,
+  attributes: {
+    ...defaultSchema.attributes,
+    code: [...(defaultSchema.attributes?.code || []), ["className", /^language-/]],
+    div: [...(defaultSchema.attributes?.div || []), ["className", /^mermaid$/]],
+    img: [
+      ...(defaultSchema.attributes?.img || []),
+      "loading",
+      "width",
+      "height",
+    ],
+    span: [...(defaultSchema.attributes?.span || []), ["className", /^markdown-alert/]],
+  },
+  protocols: {
+    ...defaultSchema.protocols,
+    href: ["http", "https", "mailto", "tel"],
+    src: ["http", "https"],
+  },
+};
 
 const countNewlinesBeforeNode = (text: string, offset: number) => {
   let newlinesBefore = 0;
@@ -129,7 +168,7 @@ export function Markdown({ content }: { content: string }) {
       className="toc-content dark:text-neutral-300"
       remarkPlugins={[gfm, remarkMermaid, remarkMath, remarkAlert, remarkBreaks]}
       children={content}
-      rehypePlugins={[rehypeKatex, rehypeRaw]}
+      rehypePlugins={[rehypeRaw, [rehypeSanitize, markdownSanitizeSchema], rehypeKatex]}
       components={{
         img({ node, src, ...props }) {
           const offset = node!.position!.start.offset!;

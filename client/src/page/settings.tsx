@@ -143,8 +143,8 @@ export function Settings() {
     if (file) {
       const { data, error } = await importWordPressFile(file);
       if (data) {
-        setMsg(t("settings.import_success$success$skipped", { success: data.imported, skipped: 0 }));
-        setMsgList([]);
+        setMsg(t("settings.import_success$success$skipped", { success: data.success, skipped: data.skipped }));
+        setMsgList(data.skippedList);
         setIsOpen(true);
       } else if (error) {
         showAlert(t("settings.import_failed$message", { message: error.value }));
@@ -440,6 +440,18 @@ export function Settings() {
             onChange={(checked) => {
               setConfigValue("client", "comment.enabled", checked);
             }}
+          />
+          <ItemSwitch
+            title={t("settings.comment.guest_enable.title")}
+            description={t("settings.comment.guest_enable.desc")}
+            checked={clientConfig.getBoolean("comment.guest.enabled")}
+            onChange={(checked) => setConfigValue("client", "comment.guest.enabled", checked)}
+          />
+          <ItemSwitch
+            title={t("settings.comment.guest_auto_approve.title")}
+            description={t("settings.comment.guest_auto_approve.desc")}
+            checked={clientConfig.getBoolean("comment.guest.auto_approve")}
+            onChange={(checked) => setConfigValue("client", "comment.guest.auto_approve", checked)}
           />
           <ItemSwitch
             title={t("settings.counter.enable.title")}

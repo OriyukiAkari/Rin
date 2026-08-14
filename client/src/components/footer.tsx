@@ -15,7 +15,6 @@ function Footer() {
     const config = useContext(ClientConfigContext);
     const footerHtml = config.get<string>('footer');
     const footerHtmlRef = useRef<HTMLDivElement | null>(null);
-    const mountedScriptNodesRef = useRef<HTMLScriptElement[]>([]);
     const loginEnabled = config.getBoolean('login.enabled');
     const [doubleClickTimes, setDoubleClickTimes] = useState(0);
     useEffect(() => {
@@ -30,8 +29,6 @@ function Footer() {
             return;
         }
 
-        mountedScriptNodesRef.current.forEach((script) => script.remove());
-        mountedScriptNodesRef.current = [];
         container.replaceChildren();
 
         if (!footerHtml) {
@@ -41,26 +38,12 @@ function Footer() {
         const template = document.createElement('template');
         template.innerHTML = footerHtml;
 
-        const scripts = Array.from(template.content.querySelectorAll('script'));
-        scripts.forEach((script) => script.remove());
+        sanitizeFooterFragment(template.content);
 
         container.appendChild(template.content.cloneNode(true));
 
-        scripts.forEach((script) => {
-            const nextScript = document.createElement('script');
-
-            Array.from(script.attributes).forEach((attribute) => {
-                nextScript.setAttribute(attribute.name, attribute.value);
-            });
-
-            nextScript.textContent = script.textContent;
-            container.appendChild(nextScript);
-            mountedScriptNodesRef.current.push(nextScript);
-        });
-
         return () => {
-            mountedScriptNodesRef.current.forEach((script) => script.remove());
-            mountedScriptNodesRef.current = [];
+            container.replaceChildren();
         };
     }, [footerHtml])
 
@@ -142,6 +125,50 @@ function Footer() {
             </div>
         </footer>
     );
+}
+
+const FORBIDDEN_FOOTER_TAGS = new Set([
+    'SCRIPT', 'IFRAME', 'OBJECT', 'EMBED', 'FORM', 'INPUT', 'BUTTON',
+    'TEXTAREA', 'SELECT', 'OPTION', 'META', 'LINK', 'STYLE', 'BASE',
+    'SVG', 'MATH',
+]);
+
+function isSafeFooterUrl(value: string, attribute: string) {
+    const normalized = value.trim().toLowerCase();
+    if (normalized.startsWith('#') || normalized.startsWith('/') || normalized.startsWith('./') || normalized.startsWith('../')) {
+        return true;
+    }
+    if (attribute === 'src' && /^data:image\/(?:png|jpe?g|gif|webp);base64,/.test(normalized)) {
+        return true;
+    }
+    try {
+        const url = new URL(value, window.location.origin);
+        return ['http:', 'https:', 'mailto:', 'tel:'].includes(url.protocol);
+    } catch {
+        return false;
+    }
+}
+
+function sanitizeFooterFragment(fragment: DocumentFragment) {
+    for (const element of Array.from(fragment.querySelectorAll('*'))) {
+        if (FORBIDDEN_FOOTER_TAGS.has(element.tagName)) {
+            element.remove();
+            continue;
+        }
+        for (const attribute of Array.from(element.attributes)) {
+            const name = attribute.name.toLowerCase();
+            if (name.startsWith('on') || name === 'style' || name === 'srcdoc') {
+                element.removeAttribute(attribute.name);
+                continue;
+            }
+            if ((name === 'href' || name === 'src' || name === 'action') && !isSafeFooterUrl(attribute.value, name)) {
+                element.removeAttribute(attribute.name);
+            }
+        }
+        if (element instanceof HTMLAnchorElement && element.target === '_blank') {
+            element.rel = 'noopener noreferrer';
+        }
+    }
 }
 
 function Spliter() {

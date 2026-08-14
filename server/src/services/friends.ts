@@ -6,6 +6,8 @@ import * as schema from "../db/schema";
 import { friends } from "../db/schema";
 import { notify } from "../utils/webhook";
 import { resolveWebhookConfig } from "./config-helpers";
+import { fetchPublicUrl, parsePublicHttpUrl } from "../utils/public-url";
+import { friendCreateSchema, friendUpdateSchema, validateSchema } from "@rin/api";
 
 export function FriendService(): Hono {
     const app = new Hono();
@@ -44,7 +46,13 @@ export function FriendService(): Hono {
         const env = c.get('env');
         const clientConfig = c.get('clientConfig');
         const serverConfig = c.get('serverConfig');
+        if (!uid) {
+            return c.text('Unauthorized', 401);
+        }
+
         const body = await profileAsync(c, 'friend_create_parse', () => c.req.json());
+        const validation = validateSchema(friendCreateSchema, body);
+        if (!validation.success) return c.text(validation.errors[0], 400);
         const { name, desc, avatar, url } = body;
         
         const enable = await profileAsync(c, 'friend_create_config', () => clientConfig.getOrDefault('friend_apply_enable', true));
@@ -52,16 +60,22 @@ export function FriendService(): Hono {
             return c.text('Friend Link Apply Disabled', 403);
         }
         
-        if (name.length > 20 || desc.length > 100 || avatar.length > 100 || url.length > 100) {
+        if (![name, desc, avatar, url].every((value) => typeof value === 'string')) {
+            return c.text('Invalid input', 400);
+        }
+
+        const normalizedUrl = parsePublicHttpUrl(url);
+        const normalizedAvatar = parsePublicHttpUrl(avatar);
+        if (!normalizedUrl || !normalizedAvatar) {
+            return c.text('Invalid URL', 400);
+        }
+
+        if (name.length > 20 || desc.length > 100 || avatar.length > 2048 || url.length > 2048) {
             return c.text('Invalid input', 400);
         }
         
         if (name.length === 0 || desc.length === 0 || avatar.length === 0 || url.length === 0) {
             return c.text('Invalid input', 400);
-        }
-        
-        if (!uid) {
-            return c.text('Unauthorized', 401);
         }
         
         if (!admin) {
@@ -73,7 +87,7 @@ export function FriendService(): Hono {
         
         const accepted = admin ? 1 : 0;
         await profileAsync(c, 'friend_create_insert', () => db.insert(friends).values({
-            name, desc, avatar, url, uid: uid, accepted
+            name, desc, avatar: normalizedAvatar, url: normalizedUrl, uid: uid, accepted
         }));
 
         if (!admin) {
@@ -86,24 +100,18 @@ export function FriendService(): Hono {
             } = await profileAsync(c, 'friend_create_webhook_config', () => resolveWebhookConfig(serverConfig, env));
             const frontendUrl = new URL(c.req.url).origin;
             const content = `${frontendUrl}/friends\n${username} 申请友链: ${name}\n${desc}\n${url}`;
-            await profileAsync(c, 'friend_create_notify', () => notify(
-                webhookUrl || "",
-                {
-                    event: "friend.created",
-                    message: content,
-                    title: name,
-                    url: `${frontendUrl}/friends`,
-                    username: username || "",
-                    content: url,
-                    description: desc,
-                },
-                {
-                    method: webhookMethod,
-                    contentType: webhookContentType,
-                    headers: webhookHeaders,
-                    bodyTemplate: webhookBodyTemplate,
-                },
-            ));
+            try {
+                await profileAsync(c, 'friend_create_notify', () => notify(
+                    webhookUrl || "",
+                    {
+                        event: "friend.created", message: content, title: name,
+                        url: `${frontendUrl}/friends`, username: username || "", content: url, description: desc,
+                    },
+                    { method: webhookMethod, contentType: webhookContentType, headers: webhookHeaders, bodyTemplate: webhookBodyTemplate },
+                ));
+            } catch (error) {
+                console.error("Failed to send friend webhook", error);
+            }
         }
         return c.text('OK');
     });
@@ -118,7 +126,14 @@ export function FriendService(): Hono {
         const clientConfig = c.get('clientConfig');
         const serverConfig = c.get('serverConfig');
         const id = c.req.param('id');
+
+        if (!uid) {
+            return c.text('Unauthorized', 401);
+        }
+
         const body = await profileAsync(c, 'friend_update_parse', () => c.req.json());
+        const validation = validateSchema(friendUpdateSchema, body);
+        if (!validation.success) return c.text(validation.errors[0], 400);
         const { name, desc, avatar, url, accepted, sort_order } = body;
         
         const enable = await profileAsync(c, 'friend_update_config', () => clientConfig.getOrDefault('friend_apply_enable', true));
@@ -126,8 +141,26 @@ export function FriendService(): Hono {
             return c.text('Friend Link Apply Disabled', 403);
         }
         
-        if (!uid) {
-            return c.text('Unauthorized', 401);
+        if ((name !== undefined && typeof name !== 'string') ||
+            (desc !== undefined && typeof desc !== 'string') ||
+            (avatar !== undefined && typeof avatar !== 'string') ||
+            (url !== undefined && typeof url !== 'string')) {
+            return c.text('Invalid input', 400);
+        }
+
+        if ((name !== undefined && (!name.trim() || name.length > 20)) ||
+            (desc !== undefined && (!desc.trim() || desc.length > 100)) ||
+            (avatar !== undefined && avatar.length > 2048) ||
+            (url !== undefined && url.length > 2048) ||
+            (accepted !== undefined && accepted !== 0 && accepted !== 1) ||
+            (sort_order !== undefined && (!Number.isSafeInteger(sort_order) || Math.abs(sort_order) > 1_000_000))) {
+            return c.text('Invalid input', 400);
+        }
+
+        const normalizedUrl = url === undefined ? undefined : parsePublicHttpUrl(url);
+        const normalizedAvatar = avatar === undefined ? undefined : parsePublicHttpUrl(avatar);
+        if ((url !== undefined && !normalizedUrl) || (avatar !== undefined && !normalizedAvatar)) {
+            return c.text('Invalid URL', 400);
         }
         
         const exist = await profileAsync(c, 'friend_update_lookup', () => db.query.friends.findFirst({ where: eq(friends.id, parseInt(id)) }));
@@ -154,8 +187,8 @@ export function FriendService(): Hono {
         await profileAsync(c, 'friend_update_db', () => db.update(friends).set({
             name: wrap(name),
             desc: wrap(desc),
-            avatar: wrap(avatar),
-            url: wrap(url),
+            avatar: wrap(normalizedAvatar || undefined),
+            url: wrap(normalizedUrl || undefined),
             accepted: finalAccepted === undefined ? undefined : finalAccepted,
             sort_order: finalSortOrder === undefined ? undefined : finalSortOrder,
         }).where(eq(friends.id, parseInt(id))));
@@ -170,24 +203,18 @@ export function FriendService(): Hono {
             } = await profileAsync(c, 'friend_update_webhook_config', () => resolveWebhookConfig(serverConfig, env));
             const frontendUrl = new URL(c.req.url).origin;
             const content = `${frontendUrl}/friends\n${username} 更新友链: ${name}\n${desc}\n${url}`;
-            await profileAsync(c, 'friend_update_notify', () => notify(
-                webhookUrl || "",
-                {
-                    event: "friend.updated",
-                    message: content,
-                    title: name,
-                    url: `${frontendUrl}/friends`,
-                    username: username || "",
-                    content: url,
-                    description: desc,
-                },
-                {
-                    method: webhookMethod,
-                    contentType: webhookContentType,
-                    headers: webhookHeaders,
-                    bodyTemplate: webhookBodyTemplate,
-                },
-            ));
+            try {
+                await profileAsync(c, 'friend_update_notify', () => notify(
+                    webhookUrl || "",
+                    {
+                        event: "friend.updated", message: content, title: name,
+                        url: `${frontendUrl}/friends`, username: username || "", content: url, description: desc,
+                    },
+                    { method: webhookMethod, contentType: webhookContentType, headers: webhookHeaders, bodyTemplate: webhookBodyTemplate },
+                ));
+            } catch (error) {
+                console.error("Failed to send friend webhook", error);
+            }
         }
         return c.text('OK');
     });
@@ -244,10 +271,14 @@ export async function friendCrontab(
     for (const friend of friend_list) {
         console.info(`checking ${friend.name}: ${friend.url}`);
         try {
-            const response = await fetch(new Request(friend.url, { 
+            const safeUrl = parsePublicHttpUrl(friend.url);
+            if (!safeUrl) {
+                throw new Error('Unsafe friend URL');
+            }
+            const response = await fetchPublicUrl(safeUrl, {
                 method: 'GET', 
                 headers: { 'User-Agent': ua } 
-            }));
+            });
             console.info(`response status: ${response.status}`);
             console.info(`response statusText: ${response.statusText}`);
             

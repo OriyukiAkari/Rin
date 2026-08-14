@@ -299,6 +299,14 @@
       "enable": {
         "desc": "Open/close the comment entry and comment area at the bottom of the article",
         "title": "Enable Comments"
+      },
+      "guest_enable": {
+        "desc": "Allow visitors who are not signed in to submit comments",
+        "title": "Allow guest comments"
+      },
+      "guest_auto_approve": {
+        "desc": "Publish guest comments without administrator review (not recommended)",
+        "title": "Auto-publish guest comments"
       }
     },
     "counter": {

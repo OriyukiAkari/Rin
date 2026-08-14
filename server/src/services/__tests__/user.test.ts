@@ -70,12 +70,10 @@ describe('UserService', () => {
             expect(location).toContain('state=');
         });
 
-        it('should require referer header', async () => {
+        it('should not trust or require a referer header', async () => {
             const res = await app.request('/github', { method: 'GET' }, env);
             
-            expect(res.status).toBe(400);
-            const data = await res.json() as { error: { message: string } };
-            expect(data.error.message).toBe('Referer header is required');
+            expect(res.status).toBe(302);
         });
 
         it('should return 400 if OAuth not configured', async () => {
@@ -160,13 +158,35 @@ describe('UserService', () => {
                 const res = await app.request('/github/callback?code=valid_code&state=mock_state', {
                     method: 'GET',
                     headers: {
-                        'Cookie': 'state=mock_state; redirect_to=http://localhost:5173/callback'
+                        'Cookie': 'state=mock_state; redirect_to=http://localhost/callback'
                     }
                 }, env);
                 
                 expect(res.status).toBe(302);
                 const location = res.headers.get('Location');
                 expect(location).toContain('/callback');
+            } finally {
+                global.fetch = originalFetch;
+            }
+        });
+
+        it('should not promote the first new GitHub user or expose a token in the redirect', async () => {
+            sqlite.exec("DELETE FROM users");
+            const originalFetch = global.fetch;
+            global.fetch = async () => new Response(JSON.stringify({
+                id: 789,
+                login: 'new-user',
+                avatar_url: 'https://avatars.githubusercontent.com/u/789',
+            }), { status: 200 });
+
+            try {
+                const res = await app.request('/github/callback?code=valid_code&state=mock_state', {
+                    headers: { Cookie: 'state=mock_state; redirect_to=http://localhost/callback' },
+                }, env);
+                expect(res.status).toBe(302);
+                expect(res.headers.get('Location')).toBe('http://localhost/callback');
+                const inserted = sqlite.prepare("SELECT permission FROM users WHERE openid = '789'").get() as { permission: number };
+                expect(inserted.permission).toBe(0);
             } finally {
                 global.fetch = originalFetch;
             }
@@ -250,7 +270,7 @@ describe('UserService', () => {
             expect(res.status).toBe(200);
             
             const dbResult = sqlite.prepare(`SELECT avatar FROM users WHERE id = 1`).all() as any[];
-            expect(dbResult[0]?.avatar).toBe('https://new-avatar.png');
+            expect(dbResult[0]?.avatar).toBe('https://new-avatar.png/');
         });
 
         it('should require authentication', async () => {

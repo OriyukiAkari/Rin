@@ -5,6 +5,7 @@ import { defaultClientConfig } from "../state/config";
 import { applyThemeColor } from "../utils/theme-color";
 import { readBootstrappedClientConfig } from "./bootstrap-config";
 import { client } from "./runtime";
+import { removeAuthToken } from "../utils/auth";
 
 function applyViewportScaling() {
   const highResolutionThreshold = 2560;
@@ -18,6 +19,7 @@ export function useAppBootstrap() {
 
   useEffect(() => {
     applyViewportScaling();
+    removeAuthToken();
 
     if (initializedRef.current) {
       return;

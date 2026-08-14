@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'bun:test';
 import { WranglerParsers } from './test-utils';
+import { verbose } from './test-log';
 
 describe('Wrangler --json 输出解析测试', () => {
     describe('parseCount', () => {
@@ -10,11 +11,11 @@ describe('Wrangler --json 输出解析测试', () => {
                 meta: { served_by: "v3-prod", duration: 0.2563 }
             }]);
 
-            console.log('\n测试 --json count 解析:');
-            console.log('  输入:', wranglerOutput);
+            verbose('\n测试 --json count 解析:');
+            verbose('  输入:', wranglerOutput);
             
             const count = WranglerParsers.parseCount(wranglerOutput);
-            console.log('  解析结果:', count);
+            verbose('  解析结果:', count);
             
             expect(count).toBe(0);
         });
@@ -27,7 +28,7 @@ describe('Wrangler --json 输出解析测试', () => {
             }]);
 
             const count = WranglerParsers.parseCount(wranglerOutput);
-            console.log('\n测试 --json 非零 count:', count);
+            verbose('\n测试 --json 非零 count:', count);
             
             expect(count).toBe(27489);
         });
@@ -47,11 +48,11 @@ describe('Wrangler --json 输出解析测试', () => {
                 meta: {}
             }]);
 
-            console.log('\n测试 --json feed_id 解析:');
-            console.log('  输入:', wranglerOutput);
+            verbose('\n测试 --json feed_id 解析:');
+            verbose('  输入:', wranglerOutput);
             
             const feedIds = WranglerParsers.parseFeedIds(wranglerOutput);
-            console.log('  解析结果:', feedIds);
+            verbose('  解析结果:', feedIds);
             
             expect(feedIds).toEqual([1, 2, 3, 42]);
             expect(feedIds.length).toBe(4);
@@ -77,11 +78,11 @@ describe('Wrangler --json 输出解析测试', () => {
                 meta: {}
             }]);
 
-            console.log('\n测试 --json IP 解析:');
-            console.log('  输入:', wranglerOutput);
+            verbose('\n测试 --json IP 解析:');
+            verbose('  输入:', wranglerOutput);
             
             const ips = WranglerParsers.parseIPs(wranglerOutput);
-            console.log('  解析结果:', ips);
+            verbose('  解析结果:', ips);
             
             expect(ips).toEqual(['192.168.1.1', '192.168.1.2', '10.0.0.1', '172.16.0.1']);
             expect(ips.length).toBe(4);
@@ -102,10 +103,10 @@ describe('Wrangler --json 输出解析测试', () => {
             const feedIds = WranglerParsers.parseFeedIds(wranglerOutput);
             const ips = WranglerParsers.parseIPs(wranglerOutput);
 
-            console.log('\n测试空 results:');
-            console.log('  count:', count);
-            console.log('  feedIds:', feedIds);
-            console.log('  ips:', ips);
+            verbose('\n测试空 results:');
+            verbose('  count:', count);
+            verbose('  feedIds:', feedIds);
+            verbose('  ips:', ips);
 
             expect(count).toBe(0);
             expect(feedIds).toEqual([]);

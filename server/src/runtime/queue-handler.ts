@@ -18,25 +18,31 @@ export async function handleQueue(
   for (const message of batch.messages) {
     const body = message.body;
     if (!isQueueTask(body)) {
+      console.warn("Discarding invalid queue message");
       message.ack();
       continue;
     }
 
-    switch (body.type) {
-      case FEED_AI_SUMMARY_TASK:
-        await processFeedAISummaryTask(
-          env,
-          db,
-          cache,
-          serverConfig,
-          body.payload,
-          clearFeedCache,
-        );
-        message.ack();
-        break;
-      default:
-        message.ack();
-        break;
+    try {
+      switch (body.type) {
+        case FEED_AI_SUMMARY_TASK:
+          await processFeedAISummaryTask(
+            env,
+            db,
+            cache,
+            serverConfig,
+            body.payload,
+            clearFeedCache,
+          );
+          message.ack();
+          break;
+        default:
+          message.ack();
+          break;
+      }
+    } catch (error) {
+      console.error("Queue task failed; retry requested", error);
+      message.retry();
     }
   }
 }

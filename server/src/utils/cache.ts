@@ -1,8 +1,13 @@
-import { eq, and, like } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import type { DB } from "../core/hono-types";
 import { cache } from "../db/schema";
 import { path_join } from "./path";
 import { getStorageObject, putStorageObjectAtKey } from "./storage";
+
+function cacheDebug(...values: unknown[]) {
+    const runtimeProcess = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process;
+    if (runtimeProcess?.env?.RIN_CACHE_DEBUG === "true") console.log(...values);
+}
 
 // Cache Utils for storing data in memory and persisting to database (with optional S3 backup)
 
@@ -43,7 +48,9 @@ export async function isPublicCacheEnabled(clientConfig: CacheConfigReader) {
 interface StorageProvider {
     load(): Promise<void>;
     save(): Promise<void>;
+    set(key: string, value: unknown): Promise<void>;
     delete(key: string): Promise<void>;
+    deleteMany(keys: string[]): Promise<void>;
     clear(): Promise<void>;
 }
 
@@ -52,7 +59,7 @@ class DatabaseStorageProvider implements StorageProvider {
     constructor(private db: DB, private cacheMap: Map<string, any>, private type: string) {}
 
     async load(): Promise<void> {
-        console.log('Cache load from database', this.type);
+        cacheDebug('Cache load from database', this.type);
         try {
             const rows = await this.db.select().from(cache).where(eq(cache.type, this.type));
             for (const row of rows) {
@@ -62,7 +69,7 @@ class DatabaseStorageProvider implements StorageProvider {
                     this.cacheMap.set(row.key, row.value);
                 }
             }
-            console.log(`Cache loaded ${rows.length} entries from database`);
+            cacheDebug(`Cache loaded ${rows.length} entries from database`);
         } catch (e: any) {
             console.error('Cache load from database failed');
             console.error(e.message);
@@ -80,7 +87,7 @@ class DatabaseStorageProvider implements StorageProvider {
             if (!currentKeys.has(key)) {
                 await this.db.delete(cache)
                     .where(and(eq(cache.key, key), eq(cache.type, this.type)));
-                console.log('Cache removed from database:', key);
+                cacheDebug('Cache removed from database:', key);
             }
         }
 
@@ -107,21 +114,39 @@ class DatabaseStorageProvider implements StorageProvider {
         }
     }
 
+    async set(key: string, value: unknown): Promise<void> {
+        if (value === undefined) {
+            console.warn(`Cache: Skipping undefined value for key "${key}"`);
+            return;
+        }
+        const valueStr = typeof value === 'string' ? value : JSON.stringify(value);
+        await this.db.insert(cache).values({ key, value: valueStr, type: this.type })
+            .onConflictDoUpdate({
+                target: [cache.key, cache.type],
+                set: { value: valueStr, updatedAt: new Date() },
+            });
+    }
+
     async delete(key: string): Promise<void> {
         try {
             await this.db.delete(cache)
                 .where(and(eq(cache.key, key), eq(cache.type, this.type)));
-            console.log('Cache deleted from database:', key);
+            cacheDebug('Cache deleted from database:', key);
         } catch (e: any) {
             console.error('Cache delete from database failed');
             console.error(e.message);
         }
     }
 
+    async deleteMany(keys: string[]): Promise<void> {
+        if (keys.length === 0) return;
+        await this.db.delete(cache).where(and(eq(cache.type, this.type), inArray(cache.key, keys)));
+    }
+
     async clear(): Promise<void> {
         try {
             await this.db.delete(cache).where(eq(cache.type, this.type));
-            console.log('Cache cleared from database');
+            cacheDebug('Cache cleared from database');
         } catch (e: any) {
             console.error('Cache clear from database failed');
             console.error(e.message);
@@ -138,11 +163,11 @@ class S3StorageProvider implements StorageProvider {
     }
 
     async load(): Promise<void> {
-        console.log('Cache load from storage', this.cacheKey);
+        cacheDebug('Cache load from storage', this.cacheKey);
         try {
             const response = await getStorageObject(this.env, this.cacheKey);
             if (!response) {
-                console.log('Cache file not found in storage, starting with empty cache');
+                cacheDebug('Cache file not found in storage, starting with empty cache');
                 return;
             }
             const data = await response.json<any>();
@@ -163,7 +188,7 @@ class S3StorageProvider implements StorageProvider {
                 JSON.stringify(Object.fromEntries(this.cacheMap)),
                 'application/json'
             ).then(() => {
-                console.log('Cache saved to storage');
+                cacheDebug('Cache saved to storage');
             }).catch((e: any) => {
                 console.error('Cache save to storage failed');
                 console.error(e.message);
@@ -174,7 +199,15 @@ class S3StorageProvider implements StorageProvider {
         }
     }
 
+    async set(): Promise<void> {
+        await this.save();
+    }
+
     async delete(): Promise<void> {
+        await this.save();
+    }
+
+    async deleteMany(): Promise<void> {
         await this.save();
     }
 
@@ -303,10 +336,10 @@ export class CacheImpl {
         }
         const cached = await this.get(key);
         if (cached !== undefined) {
-            console.log('Cache hit', key);
+            cacheDebug('Cache hit', key);
             return cached as T;
         }
-        console.log('Cache miss', key);
+        cacheDebug('Cache miss', key);
         const newValue = await value();
         await this.set(key, newValue);
         return newValue;
@@ -327,7 +360,7 @@ export class CacheImpl {
             await this.load();
         this.cache.set(key, value);
         if (save) {
-            await this.save();
+            await this.storageProvider.set(key, value);
         }
     }
 
@@ -341,25 +374,27 @@ export class CacheImpl {
     }
 
     async deletePrefix(prefix: string) {
+        if (!this.loaded) await this.load();
+        const keys: string[] = [];
         for (let key of this.cache.keys()) {
-            console.log('Cache key', key);
             if (key.startsWith(prefix)) {
-                console.log('Cache delete', key);
-                await this.delete(key, false);
+                keys.push(key);
+                this.cache.delete(key);
             }
         }
-        await this.save();
+        await this.storageProvider.deleteMany(keys);
     }
 
     async deleteSuffix(suffix: string) {
+        if (!this.loaded) await this.load();
+        const keys: string[] = [];
         for (let key of this.cache.keys()) {
-            console.log("Cache key", key);
             if (key.endsWith(suffix)) {
-                console.log("Cache delete", key);
-                await this.delete(key, false);
+                keys.push(key);
+                this.cache.delete(key);
             }
         }
-        await this.save();
+        await this.storageProvider.deleteMany(keys);
     }
 
     async clear() {
@@ -373,12 +408,12 @@ export class CacheImpl {
 
     // Migration helper: Load from S3 and save to database
     async migrateFromS3ToDatabase() {
-        console.log('Migrating cache from S3 to database...');
+        cacheDebug('Migrating cache from S3 to database...');
         const s3Provider = new S3StorageProvider(this.env, this.cache, this.type);
         await s3Provider.load();
         const dbProvider = new DatabaseStorageProvider(this.db, this.cache, this.type);
         await dbProvider.save();
-        console.log('Migration completed');
+        cacheDebug('Migration completed');
     }
 }
 

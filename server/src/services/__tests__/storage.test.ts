@@ -108,7 +108,7 @@ describe('StorageService', () => {
         `);
     }
 
-    function createAppWithEnv(appEnv: Env, uid?: number) {
+    function createAppWithEnv(appEnv: Env, uid?: number, admin = Boolean(uid)) {
         const serviceApp = new Hono<{ Bindings: Env; Variables: Variables }>();
         serviceApp.use(createMiddleware<{ Bindings: Env; Variables: Variables }>(async (c, next) => {
             c.set('db', db);
@@ -121,6 +121,7 @@ describe('StorageService', () => {
             } as JWTUtils);
             c.set('env', appEnv);
             c.set('uid', uid);
+            c.set('admin', admin);
             await next();
         }));
         serviceApp.route('/', StorageService());
@@ -141,6 +142,14 @@ describe('StorageService', () => {
             // Could be 400 (validation) or 401 (auth)
             expect(res.status).toBeGreaterThanOrEqual(400);
             expect(res.status).toBeLessThanOrEqual(401);
+        });
+
+        it('should deny uploads from authenticated non-admin users', async () => {
+            const userApp = createAppWithEnv(env, 1, false);
+            const formData = new FormData();
+            formData.append('file', new File(['image'], 'test.png', { type: 'image/png' }));
+            const res = await userApp.request('/', { method: 'POST', body: formData }, env);
+            expect(res.status).toBe(403);
         });
 
         it('should upload through R2 binding when configured', async () => {
@@ -176,8 +185,8 @@ describe('StorageService', () => {
 
             const r2App = createAppWithEnv(r2Env, 1);
             const formData = new FormData();
-            formData.append('key', 'test.txt');
-            formData.append('file', new File(['test content'], 'test.txt', { type: 'text/plain' }));
+            formData.append('key', 'test.png');
+            formData.append('file', new File(['test content'], 'test.png', { type: 'image/png' }));
 
             const res = await r2App.request('/', {
                 method: 'POST',
@@ -186,10 +195,10 @@ describe('StorageService', () => {
 
             expect(res.status).toBe(200);
             expect(putCalls).toHaveLength(1);
-            expect(putCalls[0]?.key).toMatch(/^images\/[a-f0-9]+\.txt$/);
-            expect(putCalls[0]?.type).toBe('text/plain;charset=utf-8');
+            expect(putCalls[0]?.key).toMatch(/^images\/[a-f0-9]+\.png$/);
+            expect(putCalls[0]?.type).toBe('image/png');
             const payload = await res.json() as { url: string };
-            expect(payload.url).toMatch(/^https:\/\/images\.example\.com\/images\/[a-f0-9]+\.txt$/);
+            expect(payload.url).toMatch(/^https:\/\/images\.example\.com\/images\/[a-f0-9]+\.png$/);
         });
 
         it('should return an /api/blob URL when R2 is configured without S3_ACCESS_HOST', async () => {
@@ -220,8 +229,8 @@ describe('StorageService', () => {
 
             const r2App = createAppWithEnv(r2Env, 1);
             const formData = new FormData();
-            formData.append('key', 'test.txt');
-            formData.append('file', new File(['test'], 'test.txt', { type: 'text/plain' }));
+            formData.append('key', 'test.png');
+            formData.append('file', new File(['test'], 'test.png', { type: 'image/png' }));
 
             const res = await r2App.request('/', {
                 method: 'POST',
@@ -232,7 +241,7 @@ describe('StorageService', () => {
             expect(putCalls).toHaveLength(1);
 
             const payload = await res.json() as { url: string };
-            expect(payload.url).toMatch(/^http:\/\/localhost\/api\/blob\/images\/[a-f0-9]+\.txt$/);
+            expect(payload.url).toMatch(/^http:\/\/localhost\/api\/blob\/images\/[a-f0-9]+\.png$/);
         });
 
         it('should return 500 when S3_ENDPOINT is not defined without R2 binding', async () => {
@@ -242,8 +251,8 @@ describe('StorageService', () => {
             const appNoS3 = createAppWithEnv(envNoS3, 1);
 
             const formData = new FormData();
-            formData.append('key', 'test.txt');
-            formData.append('file', new File(['test content'], 'test.txt', { type: 'text/plain' }));
+            formData.append('key', 'test.png');
+            formData.append('file', new File(['test content'], 'test.png', { type: 'image/png' }));
             
             const res = await appNoS3.request('/', {
                 method: 'POST',
@@ -261,8 +270,8 @@ describe('StorageService', () => {
             const appNoKey = createAppWithEnv(envNoKey, 1);
 
             const formData = new FormData();
-            formData.append('key', 'test.txt');
-            formData.append('file', new File(['test content'], 'test.txt', { type: 'text/plain' }));
+            formData.append('key', 'test.png');
+            formData.append('file', new File(['test content'], 'test.png', { type: 'image/png' }));
             
             const res = await appNoKey.request('/', {
                 method: 'POST',

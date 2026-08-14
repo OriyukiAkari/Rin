@@ -2,22 +2,16 @@ import { eq } from "drizzle-orm";
 import { Hono } from "hono";
 import type { AppContext, Variables } from "../core/hono-types";
 import { profileAsync } from "../core/server-timing";
-import { setJWTCookie, clearJWTCookie } from "../core/hono-middleware";
+import { setJWTCookie } from "../core/hono-middleware";
 import { users } from "../db/schema";
 import {
     BadRequestError,
     ForbiddenError,
     InternalServerError,
 } from "../errors";
-
-// Hash password using SHA-256
-async function hashPassword(password: string): Promise<string> {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(password);
-    const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
-}
+import { hashPassword, passwordNeedsUpgrade, verifyPassword } from "../utils/password";
+import { enforceRateLimit, requestClientIdentifier } from "../utils/rate-limit";
+import { loginSchema, validateSchema } from "@rin/api";
 
 export function PasswordAuthService(): Hono<{
         Bindings: Env;
@@ -41,22 +35,37 @@ export function PasswordAuthService(): Hono<{
             throw new BadRequestError('Admin credentials not configured');
         }
 
-        const { username, password } = await profileAsync(c, 'auth_login_parse', () => c.req.json()) as { username: string; password: string };
+        const body = await profileAsync(c, 'auth_login_parse', () => c.req.json());
+        const validation = validateSchema(loginSchema, body);
+        if (!validation.success) throw new BadRequestError(validation.errors[0]);
+        const { username, password } = body as { username: string; password: string };
 
         if (!username || !password) {
             throw new BadRequestError('Username and password are required');
         }
 
-        // Hash the provided password
-        const hashedPassword = await profileAsync(c, 'auth_login_hash', () => hashPassword(password));
+        const loginAllowed = await profileAsync(c, 'auth_login_rate_limit', () => enforceRateLimit(
+            db,
+            env,
+            'login',
+            `${requestClientIdentifier(c.req.raw.headers)}:${username}`,
+            10,
+            900,
+        ));
+        if (!loginAllowed) {
+            return c.json({
+                success: false,
+                error: { code: 'RATE_LIMITED', message: 'Too many login attempts' },
+            }, 429);
+        }
 
         // Check if this is the admin login
         if (username === adminUsername) {
-            const expectedHash = await profileAsync(c, 'auth_admin_hash', () => hashPassword(adminPassword));
-            
-            if (hashedPassword !== expectedHash) {
+            if (password !== adminPassword) {
                 throw new ForbiddenError('Invalid credentials');
             }
+
+            const expectedHash = await profileAsync(c, 'auth_admin_hash', () => hashPassword(adminPassword));
 
             // Find or create admin user
             let user = await profileAsync(c, 'auth_admin_lookup', () => db.query.users.findFirst({ 
@@ -86,7 +95,7 @@ export function PasswordAuthService(): Hono<{
                 throw new InternalServerError('Failed to get admin user');
             }
 
-            if (user.password !== expectedHash) {
+            if (!user.password || passwordNeedsUpgrade(user.password) || !(await verifyPassword(adminPassword, user.password))) {
                 // Update admin password if changed
                 await profileAsync(c, 'auth_admin_sync', () => db.update(users)
                     .set({ password: expectedHash, username: adminUsername })
@@ -101,7 +110,6 @@ export function PasswordAuthService(): Hono<{
 
             return c.json({
                 success: true,
-                token: token,
                 user: {
                     id: user.id,
                     username: user.username,
@@ -120,8 +128,15 @@ export function PasswordAuthService(): Hono<{
             throw new ForbiddenError('Invalid credentials');
         }
 
-        if (user.password !== hashedPassword) {
+        if (!(await profileAsync(c, 'auth_user_verify', () => verifyPassword(password, user.password!)))) {
             throw new ForbiddenError('Invalid credentials');
+        }
+
+        if (passwordNeedsUpgrade(user.password)) {
+            const upgradedPassword = await profileAsync(c, 'auth_user_upgrade_hash', () => hashPassword(password));
+            await profileAsync(c, 'auth_user_upgrade', () => db.update(users)
+                .set({ password: upgradedPassword })
+                .where(eq(users.id, user.id)));
         }
 
         // Generate JWT token
@@ -132,7 +147,6 @@ export function PasswordAuthService(): Hono<{
 
         return c.json({
             success: true,
-            token: token,
             user: {
                 id: user.id,
                 username: user.username,

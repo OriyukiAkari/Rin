@@ -3,6 +3,7 @@ import type { AppContext } from "../core/hono-types";
 import { profileAsync } from "../core/server-timing";
 import { path_join } from "../utils/path";
 import { getStorageObject, getStoragePublicUrl, putStorageObjectAtKey } from "../utils/storage";
+import { fetchPublicUrl, parsePublicHttpUrl } from "../utils/public-url";
 
 // @see https://developers.cloudflare.com/images/url-format#supported-formats-and-limitations
 export const FAVICON_ALLOWED_TYPES: { [key: string]: string } = {
@@ -18,11 +19,10 @@ export function getFaviconKey(env: Env) {
 
 async function buildFaviconFromSource(c: AppContext, sourceUrl: string, faviconKey: string) {
     const env = c.get('env');
-    const imageRequest = new Request(sourceUrl, {
-        headers: c.req.raw.headers,
-    });
-
-    const response = await fetch(imageRequest, {
+    const safeSourceUrl = parsePublicHttpUrl(sourceUrl);
+    if (!safeSourceUrl) return new Response("Invalid avatar URL", { status: 400 });
+    const response = await fetchPublicUrl(safeSourceUrl, {
+        headers: { "Accept": "image/*", "User-Agent": "Rin-Favicon/1.0" },
         cf: {
             image: {
                 width: 144,
@@ -32,13 +32,16 @@ async function buildFaviconFromSource(c: AppContext, sourceUrl: string, faviconK
                 quality: 100,
             },
         },
-    });
+    } as RequestInit);
 
     if (!response.ok) {
         return response;
     }
 
+    const contentLength = Number(response.headers.get("content-length") || "0");
+    if (contentLength > 10 * 1024 * 1024) return new Response("Avatar image is too large", { status: 413 });
     const arrayBuffer = await response.arrayBuffer();
+    if (arrayBuffer.byteLength > 10 * 1024 * 1024) return new Response("Avatar image is too large", { status: 413 });
     await putStorageObjectAtKey(
         env,
         faviconKey,

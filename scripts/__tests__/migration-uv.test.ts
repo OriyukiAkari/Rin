@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'bun:test';
 import { HyperLogLog } from '../../server/src/utils/hyperloglog';
+import { verbose } from './test-log';
 
 // 模拟 deploy-cf.ts 中的迁移函数
 async function generateHLLData(ips: string[]): Promise<string> {
@@ -30,18 +31,18 @@ describe('迁移脚本 UV 计算测试', () => {
             '172.16.0.1',
         ];
         
-        console.log('\n测试迁移脚本 UV 计算:');
-        console.log(`  输入 IP 数: ${ips.length}`);
-        console.log(`  唯一 IP 数: ${new Set(ips).size}`);
+        verbose('\n测试迁移脚本 UV 计算:');
+        verbose(`  输入 IP 数: ${ips.length}`);
+        verbose(`  唯一 IP 数: ${new Set(ips).size}`);
         
         // 生成 HLL 数据
         const hllData = await generateHLLData(ips);
-        console.log(`  HLL 数据长度: ${hllData.length}`);
-        console.log(`  HLL 数据前 50 字符: ${hllData.substring(0, 50)}...`);
+        verbose(`  HLL 数据长度: ${hllData.length}`);
+        verbose(`  HLL 数据前 50 字符: ${hllData.substring(0, 50)}...`);
         
         // 计算 UV
         const uv = await estimateUV(hllData);
-        console.log(`  计算出的 UV: ${uv}`);
+        verbose(`  计算出的 UV: ${uv}`);
         
         // UV 不应该为 0
         expect(uv).toBeGreaterThan(0);
@@ -55,8 +56,8 @@ describe('迁移脚本 UV 计算测试', () => {
         const hllData = await generateHLLData(ips);
         const uv = await estimateUV(hllData);
         
-        console.log('\n测试空 IP 列表:');
-        console.log(`  UV: ${uv}`);
+        verbose('\n测试空 IP 列表:');
+        verbose(`  UV: ${uv}`);
         
         expect(uv).toBe(0);
     });
@@ -67,8 +68,8 @@ describe('迁移脚本 UV 计算测试', () => {
         const hllData = await generateHLLData(ips);
         const uv = await estimateUV(hllData);
         
-        console.log('\n测试单个 IP:');
-        console.log(`  UV: ${uv}`);
+        verbose('\n测试单个 IP:');
+        verbose(`  UV: ${uv}`);
         
         expect(uv).toBeGreaterThan(0);
     });
@@ -82,9 +83,9 @@ describe('迁移脚本 UV 计算测试', () => {
         const hllData = await generateHLLData(ips);
         const uv = await estimateUV(hllData);
         
-        console.log('\n测试 100 个唯一 IP:');
-        console.log(`  期望 UV: 100`);
-        console.log(`  实际 UV: ${uv}`);
+        verbose('\n测试 100 个唯一 IP:');
+        verbose(`  期望 UV: 100`);
+        verbose(`  实际 UV: ${uv}`);
         
         expect(uv).toBeGreaterThan(80);
         expect(uv).toBeLessThan(120);
@@ -107,17 +108,17 @@ ip
             .map(line => line.trim())
             .filter(line => line && !/^\d+$/.test(line) && line !== 'ip');
         
-        console.log('\n测试 wrangler 输出解析:');
-        console.log(`  原始输出:\n${wranglerOutput}`);
-        console.log(`  解析后的 IPs: ${JSON.stringify(ips)}`);
-        console.log(`  IP 数量: ${ips.length}`);
+        verbose('\n测试 wrangler 输出解析:');
+        verbose(`  原始输出:\n${wranglerOutput}`);
+        verbose(`  解析后的 IPs: ${JSON.stringify(ips)}`);
+        verbose(`  IP 数量: ${ips.length}`);
         
         expect(ips.length).toBeGreaterThan(0);
         
         const hllData = await generateHLLData(ips);
         const uv = await estimateUV(hllData);
         
-        console.log(`  计算出的 UV: ${uv}`);
+        verbose(`  计算出的 UV: ${uv}`);
         
         expect(uv).toBeGreaterThan(0);
     });
@@ -139,10 +140,10 @@ ip
         const hll2 = new HyperLogLog(serialized);
         const count2 = hll2.count();
         
-        console.log('\n测试序列化一致性:');
-        console.log(`  原始计数: ${count1}`);
-        console.log(`  反序列化后计数: ${count2}`);
-        console.log(`  序列化数据长度: ${serialized.length}`);
+        verbose('\n测试序列化一致性:');
+        verbose(`  原始计数: ${count1}`);
+        verbose(`  反序列化后计数: ${count2}`);
+        verbose(`  序列化数据长度: ${serialized.length}`);
         
         expect(count1).toBe(count2);
     });

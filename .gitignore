@@ -35,6 +35,7 @@ dist-ssr
 *.sln
 *.sw?
 /.dev.vars
+backups/
 
 # Bun
 .bun/*

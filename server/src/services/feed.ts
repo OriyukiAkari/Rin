@@ -1,14 +1,15 @@
-import { and, asc, count, desc, eq, gt, like, lt, or } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, like, lt, ne, or } from "drizzle-orm";
 import { Hono } from "hono";
 import type { Variables } from "../core/hono-types";
 import { profileAsync } from "../core/server-timing";
-import { feeds, visits, visitStats } from "../db/schema";
+import { feeds, visitStats } from "../db/schema";
 import { HyperLogLog } from "../utils/hyperloglog";
 import { extractImageWithMetadata } from "../utils/image";
 import { stripMarkdown } from "../utils/markdown";
 import { syncFeedAISummaryQueueState } from "./feed-ai-summary";
 import { bindTagToPost } from "./tag";
 import { clearFeedCache } from "./clear-feed-cache";
+import { feedCreateSchema, feedSetTopSchema, feedUpdateSchema, validateSchema } from "@rin/api";
 export { clearFeedCache } from "./clear-feed-cache";
 
 // Lazy-loaded modules for WordPress import
@@ -22,6 +23,37 @@ function parseFeedId(value: string): number | null {
 
     const id = Number(value);
     return Number.isSafeInteger(id) ? id : null;
+}
+
+const RESERVED_ALIASES = new Set([
+    'admin', 'api', 'atom.xml', 'callback', 'feed', 'feed.xml', 'friends',
+    'hashtag', 'hashtags', 'login', 'moments', 'profile', 'rss.json',
+    'rss.xml', 'search', 'timeline', 'user',
+]);
+
+function normalizeFeedAlias(value: unknown) {
+    if (value === undefined || value === null || value === '') return null;
+    if (typeof value !== 'string') throw new Error('Invalid alias');
+    const alias = value.trim();
+    if (alias.length > 120 || !/^[\p{L}\p{N}_-]+$/u.test(alias) || RESERVED_ALIASES.has(alias.toLowerCase())) {
+        throw new Error('Invalid alias');
+    }
+    return alias;
+}
+
+function normalizeTags(value: unknown) {
+    if (!Array.isArray(value) || value.length > 20) throw new Error('Invalid tags');
+    const tags = value.map((tag) => typeof tag === 'string' ? tag.trim() : '');
+    if (tags.some((tag) => !tag || tag.length > 50)) throw new Error('Invalid tags');
+    return [...new Set(tags)];
+}
+
+function parseRequestedDate(value: unknown) {
+    if (value === undefined || value === null || value === '') return undefined;
+    if (typeof value !== 'string') throw new Error('Invalid date');
+    const date = new Date(value);
+    if (!Number.isFinite(date.getTime())) throw new Error('Invalid date');
+    return date;
 }
 
 async function initWPModules() {
@@ -139,18 +171,43 @@ export function FeedService(): Hono<{
         const env = c.get('env');
         const admin = c.get('admin');
         const uid = c.get('uid');
-        const body = await profileAsync(c, 'feed_create_parse', () => c.req.json());
-        const { title, alias, listed, content, summary, draft, tags, createdAt } = body;
 
         if (!admin) {
             return c.text('Permission denied', 403);
         }
 
-        if (!title) {
+        const body = await profileAsync(c, 'feed_create_parse', () => c.req.json());
+        const validation = validateSchema(feedCreateSchema, body);
+        if (!validation.success) return c.text(validation.errors[0], 400);
+        const { title, alias, listed, content, summary, draft, tags, createdAt } = body;
+
+        if (typeof title !== 'string' || !title.trim() || title.length > 300) {
             return c.text('Title is required', 400);
         }
-        if (!content) {
+        if (typeof content !== 'string' || !content.trim() || content.length > 2_000_000) {
             return c.text('Content is required', 400);
+        }
+        if (summary !== undefined && (typeof summary !== 'string' || summary.length > 10_000)) {
+            return c.text('Invalid summary', 400);
+        }
+        if (typeof listed !== 'boolean' || typeof draft !== 'boolean') {
+            return c.text('Invalid publication state', 400);
+        }
+
+        let normalizedAlias: string | null;
+        let normalizedTags: string[];
+        let date: Date;
+        try {
+            normalizedAlias = normalizeFeedAlias(alias);
+            normalizedTags = normalizeTags(tags);
+            date = parseRequestedDate(createdAt) || new Date();
+        } catch (error) {
+            return c.text(error instanceof Error ? error.message : 'Invalid input', 400);
+        }
+
+        if (normalizedAlias) {
+            const aliasExists = await db.query.feeds.findFirst({ where: eq(feeds.alias, normalizedAlias) });
+            if (aliasExists) return c.text('Alias already exists', 409);
         }
 
         const exist = await profileAsync(c, 'feed_create_existing', () => db.query.feeds.findFirst({
@@ -160,8 +217,6 @@ export function FeedService(): Hono<{
         if (exist) {
             return c.text('Content already exists', 400);
         }
-
-        const date = createdAt ? new Date(createdAt) : new Date();
 
         if (!uid) {
             return c.text('User ID is required', 400);
@@ -175,14 +230,18 @@ export function FeedService(): Hono<{
             ai_summary_status: "idle",
             ai_summary_error: "",
             uid,
-            alias,
+            alias: normalizedAlias,
             listed: listed ? 1 : 0,
             draft: draft ? 1 : 0,
             createdAt: date,
             updatedAt: date
         }).returning({ insertedId: feeds.id }));
 
-        await profileAsync(c, 'feed_create_tags', () => bindTagToPost(db, result[0].insertedId, tags));
+        if (result.length === 0) {
+            return c.text('Failed to insert', 500);
+        }
+
+        await profileAsync(c, 'feed_create_tags', () => bindTagToPost(db, result[0].insertedId, normalizedTags));
         await profileAsync(c, 'feed_create_ai_queue', () => syncFeedAISummaryQueueState(db, serverConfig, env, result[0].insertedId, {
             draft: Boolean(draft),
             updatedAt: date,
@@ -190,11 +249,7 @@ export function FeedService(): Hono<{
         }));
         await profileAsync(c, 'feed_create_cache_invalidate', () => cache.deletePrefix('feeds_'));
 
-        if (result.length === 0) {
-            return c.text('Failed to insert', 500);
-        } else {
-            return c.json(result[0]);
-        }
+        return c.json(result[0]);
     });
 
     // GET /feed/:id
@@ -249,13 +304,15 @@ export function FeedService(): Hono<{
 
             if (!stats) {
                 // Create new stats record
+                const hll = new HyperLogLog();
+                hll.add(visitorKey);
                 await profileAsync(c, 'feed_detail_stats_insert', () => db.insert(visitStats).values({
                     feedId: feed.id,
                     pv: 1,
-                    hllData: new HyperLogLog().serialize()
+                    hllData: hll.serialize()
                 }));
                 pv = 1;
-                uv = 1;
+                uv = Math.round(hll.count());
             } else {
                 // Update existing stats
                 const hll = new HyperLogLog(stats.hllData);
@@ -274,9 +331,6 @@ export function FeedService(): Hono<{
                 pv = newPv;
                 uv = Math.round(hll.count());
             }
-
-            // Keep recording to visits table for backup/history
-            await profileAsync(c, 'feed_detail_visit_insert', () => db.insert(visits).values({ feedId: feed.id, ip: ip }));
         }
 
         return c.json({ ...other, hashtags: hashtags_flatten, pv, uv });
@@ -383,8 +437,6 @@ export function FeedService(): Hono<{
         const admin = c.get('admin');
         const uid = c.get('uid');
         const id = c.req.param('id');
-        const body = await profileAsync(c, 'feed_update_parse', () => c.req.json());
-        const { title, listed, content, summary, alias, draft, top, tags, createdAt } = body;
 
         const id_num = parseInt(id);
         const feed = await profileAsync(c, 'feed_update_lookup', () => db.query.feeds.findFirst({ where: eq(feeds.id, id_num) }));
@@ -395,6 +447,45 @@ export function FeedService(): Hono<{
 
         if (feed.uid !== uid && !admin) {
             return c.text('Permission denied', 403);
+        }
+
+        const body = await profileAsync(c, 'feed_update_parse', () => c.req.json());
+        const validation = validateSchema(feedUpdateSchema, body);
+        if (!validation.success) return c.text(validation.errors[0], 400);
+        const { title, listed, content, summary, alias, draft, top, tags, createdAt } = body;
+
+
+        if (title !== undefined && (typeof title !== 'string' || !title.trim() || title.length > 300)) {
+            return c.text('Invalid title', 400);
+        }
+        if (content !== undefined && (typeof content !== 'string' || !content.trim() || content.length > 2_000_000)) {
+            return c.text('Invalid content', 400);
+        }
+        if (summary !== undefined && (typeof summary !== 'string' || summary.length > 10_000)) {
+            return c.text('Invalid summary', 400);
+        }
+        if (listed !== undefined && typeof listed !== 'boolean' || draft !== undefined && typeof draft !== 'boolean') {
+            return c.text('Invalid publication state', 400);
+        }
+        if (top !== undefined && top !== 0 && top !== 1) {
+            return c.text('Invalid top value', 400);
+        }
+
+        let normalizedAlias: string | null | undefined;
+        let normalizedTags: string[] | undefined;
+        let requestedDate: Date | undefined;
+        try {
+            normalizedAlias = alias === undefined ? undefined : normalizeFeedAlias(alias);
+            normalizedTags = tags === undefined ? undefined : normalizeTags(tags);
+            requestedDate = parseRequestedDate(createdAt);
+        } catch (error) {
+            return c.text(error instanceof Error ? error.message : 'Invalid input', 400);
+        }
+        if (normalizedAlias) {
+            const aliasExists = await db.query.feeds.findFirst({
+                where: and(eq(feeds.alias, normalizedAlias), ne(feeds.id, id_num)),
+            });
+            if (aliasExists) return c.text('Alias already exists', 409);
         }
 
         const contentChanged = content && content !== feed.content;
@@ -409,16 +500,16 @@ export function FeedService(): Hono<{
             ai_summary: shouldQueueAISummary ? "" : undefined,
             ai_summary_status: isDraft ? "idle" : undefined,
             ai_summary_error: shouldQueueAISummary || isDraft ? "" : undefined,
-            alias,
-            top,
-            listed: listed ? 1 : 0,
+            alias: normalizedAlias,
+            top: top === undefined ? undefined : Number(top),
+            listed: listed === undefined ? undefined : listed ? 1 : 0,
             draft: draft === undefined ? undefined : draft ? 1 : 0,
-            createdAt: createdAt ? new Date(createdAt) : undefined,
+            createdAt: requestedDate,
             updatedAt: updateTime
         }).where(eq(feeds.id, id_num)));
 
-        if (tags) {
-            await profileAsync(c, 'feed_update_tags', () => bindTagToPost(db, id_num, tags));
+        if (normalizedTags) {
+            await profileAsync(c, 'feed_update_tags', () => bindTagToPost(db, id_num, normalizedTags));
         }
 
         if (shouldQueueAISummary || isDraft) {
@@ -429,7 +520,7 @@ export function FeedService(): Hono<{
             }));
         }
 
-        await profileAsync(c, 'feed_update_cache_invalidate', () => clearFeedCache(cache, id_num, feed.alias, alias || null));
+        await profileAsync(c, 'feed_update_cache_invalidate', () => clearFeedCache(cache, id_num, feed.alias, normalizedAlias ?? feed.alias));
         return c.text('Updated');
     });
 
@@ -440,8 +531,6 @@ export function FeedService(): Hono<{
         const admin = c.get('admin');
         const uid = c.get('uid');
         const id = c.req.param('id');
-        const body = await profileAsync(c, 'feed_top_parse', () => c.req.json());
-        const { top } = body;
 
         const id_num = parseInt(id);
         const feed = await profileAsync(c, 'feed_top_lookup', () => db.query.feeds.findFirst({ where: eq(feeds.id, id_num) }));
@@ -452,6 +541,15 @@ export function FeedService(): Hono<{
 
         if (feed.uid !== uid && !admin) {
             return c.text('Permission denied', 403);
+        }
+
+        const body = await profileAsync(c, 'feed_top_parse', () => c.req.json());
+        const validation = validateSchema(feedSetTopSchema, body);
+        if (!validation.success) return c.text(validation.errors[0], 400);
+        const { top } = body;
+
+        if (top !== 0 && top !== 1) {
+            return c.text('Invalid top value', 400);
         }
 
         await profileAsync(c, 'feed_top_db', () => db.update(feeds).set({ top }).where(eq(feeds.id, feed.id)));
@@ -511,7 +609,7 @@ export function SearchService(): Hono<{
             return c.json({ size: 0, data: [], hasNext: false });
         }
 
-        const cacheKey = `search_${keyword}`;
+        const cacheKey = `search_${admin ? 'admin' : 'public'}_${keyword}`;
         const searchKeyword = `%${keyword}%`;
         const whereClause = or(
             like(feeds.title, searchKeyword),
@@ -521,7 +619,7 @@ export function SearchService(): Hono<{
         );
 
         const feed_list = (await profileAsync(c, 'feed_search_cache_db', () => cache.getOrSet(cacheKey, () => db.query.feeds.findMany({
-            where: admin ? whereClause : and(whereClause, eq(feeds.draft, 0)),
+            where: admin ? whereClause : and(whereClause, eq(feeds.draft, 0), eq(feeds.listed, 1)),
             columns: admin ? undefined : { draft: false, listed: false },
             with: {
                 hashtags: {
@@ -569,15 +667,23 @@ export function WordPressService(): Hono<{
     app.post('/', async (c) => {
         const db = c.get('db');
         const cache = c.get('cache');
+        const serverConfig = c.get('serverConfig');
+        const env = c.get('env');
         const admin = c.get('admin');
-        const body = await profileAsync(c, 'wp_import_parse', () => c.req.parseBody());
-        const data = body.data as File;
+        const uid = c.get('uid');
 
         if (!admin) {
             return c.text('Permission denied', 403);
         }
 
-        if (!data) {
+        if (!uid) {
+            return c.text('User ID is required', 400);
+        }
+
+        const body = await profileAsync(c, 'wp_import_parse', () => c.req.parseBody());
+        const data = body.data as File;
+
+        if (!data || typeof data.text !== 'function' || data.size <= 0 || data.size > 20 * 1024 * 1024) {
             return c.text('Data is required', 400);
         }
 
@@ -586,30 +692,47 @@ export function WordPressService(): Hono<{
 
         const xml = await profileAsync(c, 'wp_import_read', () => data.text());
         const parser = new XMLParser();
-        const result = await profileAsync(c, 'wp_import_xml_parse', () => parser.parse(xml));
-        const items = result.rss.channel.item;
+        let result: any;
+        try {
+            result = await profileAsync(c, 'wp_import_xml_parse', () => parser.parse(xml));
+        } catch {
+            return c.text('Invalid WordPress export', 400);
+        }
+        const rawItems = result?.rss?.channel?.item;
+        const items = Array.isArray(rawItems) ? rawItems : rawItems ? [rawItems] : [];
 
-        if (!items) {
+        if (items.length === 0) {
             return c.text('No items found', 404);
         }
+        if (items.length > 5000) {
+            return c.text('WordPress export contains too many items', 400);
+        }
 
-        const feedItems: FeedItem[] = items?.map((item: any) => {
-            const createdAt = new Date(item?.['wp:post_date']);
-            const updatedAt = new Date(item?.['wp:post_modified']);
+        const feedItems: FeedItem[] = items.map((item: any) => {
+            const parsedCreatedAt = new Date(item?.['wp:post_date']);
+            const parsedUpdatedAt = new Date(item?.['wp:post_modified']);
+            const createdAt = Number.isFinite(parsedCreatedAt.getTime()) ? parsedCreatedAt : new Date();
+            const updatedAt = Number.isFinite(parsedUpdatedAt.getTime()) ? parsedUpdatedAt : createdAt;
             const draft = item?.['wp:status'] !== 'publish';
-            const contentHtml = item?.['content:encoded'];
+            const contentHtml = typeof item?.['content:encoded'] === 'string' ? item['content:encoded'] : '';
             const content = html2md(contentHtml);
             const summary = content.length > 100 ? content.slice(0, 100) : content;
             let tags = item?.['category'];
 
             if (tags && Array.isArray(tags)) {
-                tags = tags.map((tag: any) => tag + '');
+                tags = tags.map((tag: any) => typeof tag === 'object' ? String(tag?.['#text'] || '') : String(tag));
             } else if (tags && typeof tags === 'string') {
                 tags = [tags];
             }
 
+            try {
+                tags = tags ? normalizeTags(tags) : [];
+            } catch {
+                tags = [];
+            }
+
             return {
-                title: item.title,
+                title: String(item.title || 'Untitled').slice(0, 300),
                 summary,
                 content,
                 draft,
@@ -641,21 +764,33 @@ export function WordPressService(): Hono<{
                 title: item.title,
                 content: item.content,
                 summary: item.summary,
-                uid: 1,
+                uid,
                 listed: 1,
                 draft: item.draft ? 1 : 0,
                 createdAt: item.createdAt,
                 updatedAt: item.updatedAt
             }).returning({ insertedId: feeds.id }));
 
+            if (result.length === 0) {
+                skippedList.push({ title: item.title, reason: "insert failed" });
+                skipped++;
+                continue;
+            }
+
             if (item.tags) {
                 const tags = item.tags;
                 await profileAsync(c, 'wp_import_tags', () => bindTagToPost(db, result[0].insertedId, tags));
             }
+            await profileAsync(c, 'wp_import_ai_queue', () => syncFeedAISummaryQueueState(db, serverConfig, env, result[0].insertedId, {
+                draft: item.draft,
+                updatedAt: item.updatedAt,
+                resetSummary: true,
+            }));
             success++;
         }
 
         await profileAsync(c, 'wp_import_cache_invalidate', () => cache.deletePrefix('feeds_'));
+        await profileAsync(c, 'wp_import_search_cache_invalidate', () => cache.deletePrefix('search_'));
         return c.json({ success, skipped, skippedList });
     });
     return app;

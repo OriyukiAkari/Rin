@@ -17,7 +17,7 @@ runs:
         #:schema node_modules/wrangler/config-schema.json
         name = "rin-server"
         main = "server/src/_worker.ts"
-        compatibility_date = "2025-03-21"
+        compatibility_date = "2026-01-20"
 
         [assets]
         directory = "./dist/client"

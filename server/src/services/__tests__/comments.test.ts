@@ -10,6 +10,7 @@ describe('CommentService', () => {
     let sqlite: Database;
     let env: Env;
     let app: Hono<{ Bindings: Env; Variables: Variables }>;
+    let clientConfig: Awaited<ReturnType<typeof setupTestApp>>['clientConfig'];
     const originalFetch = globalThis.fetch;
 
     beforeEach(async () => {
@@ -18,6 +19,7 @@ describe('CommentService', () => {
         sqlite = ctx.sqlite;
         env = ctx.env;
         app = ctx.app;
+        clientConfig = ctx.clientConfig;
         
         // Seed test data
         await seedTestData(sqlite);
@@ -78,7 +80,10 @@ describe('CommentService', () => {
         });
 
         it('should not expose sensitive fields', async () => {
-            const res = await app.request('/1', { method: 'GET' }, env);
+            const res = await app.request('/1', {
+                method: 'GET',
+                headers: { 'Authorization': 'Bearer mock_token_3' },
+            }, env);
             
             expect(res.status).toBe(200);
             const data = await res.json() as any;
@@ -165,13 +170,44 @@ describe('CommentService', () => {
             }, env);
             expect(createRes.status).toBe(200);
 
-            const res = await app.request('/1', { method: 'GET' }, env);
+            const res = await app.request('/1', {
+                method: 'GET',
+                headers: { 'Authorization': 'Bearer mock_token_3' },
+            }, env);
             expect(res.status).toBe(200);
             const data = await res.json() as any[];
             const guestComment = data.find((c: any) => c.guestName === 'Guest');
             expect(guestComment).toBeDefined();
             expect(guestComment.user).toBeNull();
             expect(guestComment.content).toBe('Hi from guest');
+        });
+
+        it('should keep guest email private and publish only after admin approval', async () => {
+            const createRes = await app.request('/1', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    content: 'Pending guest comment',
+                    guestName: 'Private Guest',
+                    guestEmail: 'private@example.com',
+                }),
+            }, env);
+            expect(createRes.status).toBe(200);
+
+            const pending = sqlite.prepare("SELECT id FROM comments WHERE guest_name = 'Private Guest'").get() as { id: number };
+            const beforeApproval = await app.request('/1', { method: 'GET' }, env);
+            expect((await beforeApproval.json() as any[]).some((comment) => comment.guestName === 'Private Guest')).toBe(false);
+
+            const approveRes = await app.request(`/approve/${pending.id}`, {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer mock_token_3' },
+            }, env);
+            expect(approveRes.status).toBe(200);
+
+            const afterApproval = await app.request('/1', { method: 'GET' }, env);
+            const published = (await afterApproval.json() as any[]).find((comment) => comment.guestName === 'Private Guest');
+            expect(published).toBeDefined();
+            expect(published).not.toHaveProperty('guestEmail');
         });
 
         it('should return 400 when not authenticated and guest name missing', async () => {

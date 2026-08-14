@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'bun:test';
 import { HyperLogLog } from '../../server/src/utils/hyperloglog';
 import { HLLTestData, calculateRelativeError } from './test-utils';
+import { verbose } from './test-log';
 
 // HLL 误差测试配置
 // 
@@ -61,7 +62,7 @@ describe('HLL 算法误差测试 - 不同数据规模', () => {
                 let passed: boolean;
                 
                 if (Number.isNaN(estimatedUV)) {
-                    console.log(`\n[${config.scale}] 警告: HLL 估算返回 NaN，数据量可能超出算法范围`);
+                    verbose(`\n[${config.scale}] 警告: HLL 估算返回 NaN，数据量可能超出算法范围`);
                     relativeError = Infinity;
                     passed = false;
                 } else {
@@ -81,10 +82,10 @@ describe('HLL 算法误差测试 - 不同数据规模', () => {
                 };
                 results.push(stats);
 
-                console.log(`\n[${config.scale}] 唯一IPs: ${actualUnique}, 总访问: ${totalVisits}`);
-                console.log(`  实际UV: ${actualUnique}, 估算UV: ${Math.round(estimatedUV)}`);
-                console.log(`  相对误差: ${(relativeError * 100).toFixed(2)}%, 容差: ${(config.tolerance * 100).toFixed(1)}%`);
-                console.log(`  结果: ${passed ? '✅ 通过' : '❌ 失败'}`);
+                verbose(`\n[${config.scale}] 唯一IPs: ${actualUnique}, 总访问: ${totalVisits}`);
+                verbose(`  实际UV: ${actualUnique}, 估算UV: ${Math.round(estimatedUV)}`);
+                verbose(`  相对误差: ${(relativeError * 100).toFixed(2)}%, 容差: ${(config.tolerance * 100).toFixed(1)}%`);
+                verbose(`  结果: ${passed ? '✅ 通过' : '❌ 失败'}`);
 
                 expect(relativeError).toBeLessThanOrEqual(config.tolerance);
             });
@@ -92,11 +93,11 @@ describe('HLL 算法误差测试 - 不同数据规模', () => {
     }
 
     it('生成误差统计报告', () => {
-        console.log('\n' + '='.repeat(80));
-        console.log('HLL 算法误差测试报告');
-        console.log('='.repeat(80));
-        console.log('\n规模      唯一IP数   总访问数   实际UV     估算UV     误差(%)    容差(%)    结果');
-        console.log('-'.repeat(80));
+        verbose('\n' + '='.repeat(80));
+        verbose('HLL 算法误差测试报告');
+        verbose('='.repeat(80));
+        verbose('\n规模      唯一IP数   总访问数   实际UV     估算UV     误差(%)    容差(%)    结果');
+        verbose('-'.repeat(80));
 
         let totalPassed = 0;
         let totalTests = results.length;
@@ -106,7 +107,7 @@ describe('HLL 算法误差测试 - 不同数据规模', () => {
             const tolerancePercent = (r.tolerance * 100).toFixed(1).padStart(5);
             const result = r.passed ? '✅ 通过' : '❌ 失败';
             
-            console.log(
+            verbose(
                 `${r.scale.padEnd(8)} ` +
                 `${r.uniqueCount.toString().padStart(8)} ` +
                 `${r.totalCount.toString().padStart(8)} ` +
@@ -120,9 +121,9 @@ describe('HLL 算法误差测试 - 不同数据规模', () => {
             if (r.passed) totalPassed++;
         }
 
-        console.log('-'.repeat(80));
-        console.log(`总计: ${totalPassed}/${totalTests} 通过 (${((totalPassed/totalTests)*100).toFixed(1)}%)`);
-        console.log('='.repeat(80));
+        verbose('-'.repeat(80));
+        verbose(`总计: ${totalPassed}/${totalTests} 通过 (${((totalPassed/totalTests)*100).toFixed(1)}%)`);
+        verbose('='.repeat(80));
 
         expect(totalPassed).toBe(totalTests);
     });
@@ -146,9 +147,9 @@ describe('HLL 算法误差测试 - 不同重复率场景', () => {
                 const estimatedUV = hll.count();
                 const relativeError = calculateRelativeError(estimatedUV, actualUnique);
 
-                console.log(`\n重复率 ${(ratio * 100).toFixed(0)}%:`);
-                console.log(`  唯一IPs: ${actualUnique}, 总访问: ${ips.length}`);
-                console.log(`  估算UV: ${Math.round(estimatedUV)}, 误差: ${(relativeError * 100).toFixed(2)}%`);
+                verbose(`\n重复率 ${(ratio * 100).toFixed(0)}%:`);
+                verbose(`  唯一IPs: ${actualUnique}, 总访问: ${ips.length}`);
+                verbose(`  估算UV: ${Math.round(estimatedUV)}, 误差: ${(relativeError * 100).toFixed(2)}%`);
 
                 expect(relativeError).toBeLessThanOrEqual(0.1);
             });
@@ -177,9 +178,9 @@ describe('HLL 算法误差测试 - 极端分布场景', () => {
         const estimatedUV = hll.count();
         const relativeError = calculateRelativeError(estimatedUV, uniqueCount);
         
-        console.log('\n高度倾斜分布:');
-        console.log(`  唯一IPs: ${uniqueCount}, 总访问: ${ips.length}`);
-        console.log(`  估算UV: ${Math.round(estimatedUV)}, 误差: ${(relativeError * 100).toFixed(2)}%`);
+        verbose('\n高度倾斜分布:');
+        verbose(`  唯一IPs: ${uniqueCount}, 总访问: ${ips.length}`);
+        verbose(`  估算UV: ${Math.round(estimatedUV)}, 误差: ${(relativeError * 100).toFixed(2)}%`);
         
         expect(relativeError).toBeLessThanOrEqual(0.15);
     });
@@ -203,9 +204,9 @@ describe('HLL 算法误差测试 - 极端分布场景', () => {
         const estimatedUV = hll.count();
         const relativeError = calculateRelativeError(estimatedUV, uniqueCount);
         
-        console.log('\n均匀分布:');
-        console.log(`  唯一IPs: ${uniqueCount}, 总访问: ${ips.length}`);
-        console.log(`  估算UV: ${Math.round(estimatedUV)}, 误差: ${(relativeError * 100).toFixed(2)}%`);
+        verbose('\n均匀分布:');
+        verbose(`  唯一IPs: ${uniqueCount}, 总访问: ${ips.length}`);
+        verbose(`  估算UV: ${Math.round(estimatedUV)}, 误差: ${(relativeError * 100).toFixed(2)}%`);
         
         expect(relativeError).toBeLessThanOrEqual(0.1);
     });
@@ -229,9 +230,9 @@ describe('HLL 算法误差测试 - 极端分布场景', () => {
         const estimatedUV = hll.count();
         const relativeError = calculateRelativeError(estimatedUV, uniqueCount);
         
-        console.log('\n随机分布:');
-        console.log(`  唯一IPs: ${uniqueCount}, 总访问: ${ips.length}`);
-        console.log(`  估算UV: ${Math.round(estimatedUV)}, 误差: ${(relativeError * 100).toFixed(2)}%`);
+        verbose('\n随机分布:');
+        verbose(`  唯一IPs: ${uniqueCount}, 总访问: ${ips.length}`);
+        verbose(`  估算UV: ${Math.round(estimatedUV)}, 误差: ${(relativeError * 100).toFixed(2)}%`);
         
         expect(relativeError).toBeLessThanOrEqual(0.1);
     });
@@ -257,10 +258,10 @@ describe('HLL 算法误差测试 - 连续迁移场景', () => {
         const firstEstimate = estimates[0];
         const allSame = estimates.every(e => e === firstEstimate);
         
-        console.log('\n连续迁移测试:');
-        console.log(`  唯一IPs: ${uniqueCount}`);
-        console.log(`  5次估算: ${estimates.map(e => Math.round(e)).join(', ')}`);
-        console.log(`  一致性: ${allSame ? '✅ 通过' : '❌ 失败'}`);
+        verbose('\n连续迁移测试:');
+        verbose(`  唯一IPs: ${uniqueCount}`);
+        verbose(`  5次估算: ${estimates.map(e => Math.round(e)).join(', ')}`);
+        verbose(`  一致性: ${allSame ? '✅ 通过' : '❌ 失败'}`);
         
         expect(allSame).toBe(true);
     });
@@ -284,9 +285,9 @@ describe('HLL 算法误差测试 - 连续迁移场景', () => {
         const estimatedUV = hll.count();
         const relativeError = calculateRelativeError(estimatedUV, uniqueCount);
         
-        console.log('\n增量迁移测试:');
-        console.log(`  唯一IPs: ${uniqueCount}, 批次大小: ${batchSize}`);
-        console.log(`  估算UV: ${Math.round(estimatedUV)}, 误差: ${(relativeError * 100).toFixed(2)}%`);
+        verbose('\n增量迁移测试:');
+        verbose(`  唯一IPs: ${uniqueCount}, 批次大小: ${batchSize}`);
+        verbose(`  估算UV: ${Math.round(estimatedUV)}, 误差: ${(relativeError * 100).toFixed(2)}%`);
         
         expect(relativeError).toBeLessThanOrEqual(0.1);
     });
@@ -300,8 +301,8 @@ describe('HLL 算法误差测试 - 边界条件', () => {
         const estimatedUV = hll.count();
         const relativeError = calculateRelativeError(estimatedUV, 1);
         
-        console.log('\n单个IP测试:');
-        console.log(`  估算UV: ${Math.round(estimatedUV)}, 误差: ${(relativeError * 100).toFixed(2)}%`);
+        verbose('\n单个IP测试:');
+        verbose(`  估算UV: ${Math.round(estimatedUV)}, 误差: ${(relativeError * 100).toFixed(2)}%`);
         
         expect(estimatedUV).toBeGreaterThan(0);
         expect(estimatedUV).toBeLessThanOrEqual(5);
@@ -315,8 +316,8 @@ describe('HLL 算法误差测试 - 边界条件', () => {
         const estimatedUV = hll.count();
         const relativeError = calculateRelativeError(estimatedUV, 2);
         
-        console.log('\n两个IP测试:');
-        console.log(`  估算UV: ${Math.round(estimatedUV)}, 误差: ${(relativeError * 100).toFixed(2)}%`);
+        verbose('\n两个IP测试:');
+        verbose(`  估算UV: ${Math.round(estimatedUV)}, 误差: ${(relativeError * 100).toFixed(2)}%`);
         
         expect(estimatedUV).toBeGreaterThan(1);
         expect(estimatedUV).toBeLessThanOrEqual(5);
@@ -330,8 +331,8 @@ describe('HLL 算法误差测试 - 边界条件', () => {
         
         const estimatedUV = hll.count();
         
-        console.log('\n大量相同IP测试:');
-        console.log(`  访问次数: 10000, 估算UV: ${Math.round(estimatedUV)}`);
+        verbose('\n大量相同IP测试:');
+        verbose(`  访问次数: 10000, 估算UV: ${Math.round(estimatedUV)}`);
         
         expect(estimatedUV).toBeGreaterThan(0);
         expect(estimatedUV).toBeLessThanOrEqual(3);
@@ -341,8 +342,8 @@ describe('HLL 算法误差测试 - 边界条件', () => {
         const hll = new HyperLogLog();
         const estimatedUV = hll.count();
         
-        console.log('\n空数据测试:');
-        console.log(`  估算UV: ${Math.round(estimatedUV)}`);
+        verbose('\n空数据测试:');
+        verbose(`  估算UV: ${Math.round(estimatedUV)}`);
         
         expect(estimatedUV).toBe(0);
     });

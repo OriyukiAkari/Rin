@@ -3,7 +3,7 @@ import { Hono } from "hono";
 import { moments } from "../db/schema";
 import type { AppContext } from "../core/hono-types";
 import { profileAsync } from "../core/server-timing";
-import { momentCreateSchema, momentUpdateSchema } from "@rin/api";
+import { momentCreateSchema, momentUpdateSchema, validateSchema } from "@rin/api";
 
 export function MomentsService(): Hono {
     const app = new Hono();
@@ -56,8 +56,6 @@ export function MomentsService(): Hono {
         const cache = c.get('cache');
         const uid = c.get('uid');
         const admin = c.get('admin');
-        const body = await profileAsync(c, 'moments_create_parse', () => c.req.json());
-        const { content } = body;
         
         if (!uid) {
             return c.text('Unauthorized', 401);
@@ -66,8 +64,13 @@ export function MomentsService(): Hono {
         if (!admin) {
             return c.text('Permission denied', 403);
         }
+
+        const body = await profileAsync(c, 'moments_create_parse', () => c.req.json());
+        const validation = validateSchema(momentCreateSchema, body);
+        if (!validation.success) return c.text(validation.errors[0], 400);
+        const { content } = body;
         
-        if (!content) {
+        if (!content.trim() || content.length > 100_000) {
             return c.text('Content is required', 400);
         }
         
@@ -92,8 +95,6 @@ export function MomentsService(): Hono {
         const uid = c.get('uid');
         const admin = c.get('admin');
         const id = c.req.param('id');
-        const body = await profileAsync(c, 'moments_update_parse', () => c.req.json());
-        const { content } = body;
         
         if (!uid) {
             return c.text('Unauthorized', 401);
@@ -109,8 +110,13 @@ export function MomentsService(): Hono {
         if (!moment) {
             return c.text('Not found', 404);
         }
+
+        const body = await profileAsync(c, 'moments_update_parse', () => c.req.json());
+        const validation = validateSchema(momentUpdateSchema, body);
+        if (!validation.success) return c.text(validation.errors[0], 400);
+        const { content } = body;
         
-        if (!content) {
+        if (!content.trim() || content.length > 100_000) {
             return c.text('Content is required', 400);
         }
         

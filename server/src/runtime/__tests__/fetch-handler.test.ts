@@ -29,6 +29,8 @@ describe("handleFetch", () => {
     );
 
     expect(await response.text()).toBe("asset-body");
+    expect(response.headers.get("Content-Security-Policy")).toContain("script-src 'self'");
+    expect(response.headers.get("X-Frame-Options")).toBe("DENY");
     expect(assetFetch).toHaveBeenCalledTimes(1);
     expect(getAppFetch).toHaveBeenCalledTimes(0);
   });

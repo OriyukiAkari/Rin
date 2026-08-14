@@ -121,7 +121,6 @@ export async function notify(
   format?: WebhookFormatConfig,
 ) {
   if (!webhookUrl) {
-    console.error("Please set WEBHOOK_URL");
     return;
   }
 

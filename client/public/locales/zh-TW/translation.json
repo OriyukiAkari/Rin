@@ -299,6 +299,14 @@
       "enable": {
         "desc": "開啟/關閉文章底部留言入口與留言區",
         "title": "啟用留言"
+      },
+      "guest_enable": {
+        "desc": "允許未登入訪客提交留言",
+        "title": "允許訪客留言"
+      },
+      "guest_auto_approve": {
+        "desc": "訪客留言不經管理員審核直接公開（不建議）",
+        "title": "自動公開訪客留言"
       }
     },
     "counter": {

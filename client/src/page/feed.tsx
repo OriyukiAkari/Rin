@@ -2,7 +2,6 @@ import type { Feed } from "@rin/api";
 import { useContext, useEffect, useRef, useState } from "react";
 import { Helmet } from "react-helmet";
 import { useTranslation } from "react-i18next";
-import ReactModal from "react-modal";
 import Popup from "reactjs-popup";
 import { Link, useLocation } from "wouter";
 import { useAlert, useConfirm } from "../components/dialog";
@@ -323,51 +322,6 @@ export function FeedPage({ id, TOC, clean }: { id: string, TOC: () => JSX.Elemen
   );
 }
 
-export function TOCHeader({ TOC }: { TOC: () => JSX.Element }) {
-  const [isOpened, setIsOpened] = useState(false);
-
-  return (
-    <div className="shrink-0 lg:hidden">
-      <button
-        onClick={() => setIsOpened(true)}
-        className="w-10 h-10 rounded-full flex flex-row items-center justify-center"
-      >
-        <i className="ri-menu-2-line text-neutral-500 transition-colors hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100 ri-lg md:ri-sm md:t-secondary"></i>
-      </button>
-      <ReactModal
-        isOpen={isOpened}
-        style={{
-          content: {
-            top: "50%",
-            left: "50%",
-            right: "auto",
-            bottom: "auto",
-            marginRight: "-50%",
-            transform: "translate(-50%, -50%)",
-            padding: "0",
-            border: "none",
-            borderRadius: "16px",
-            display: "flex",
-            flexDirection: "column",
-            justifyContent: "center",
-            alignItems: "center",
-            background: "none",
-          },
-          overlay: {
-            backgroundColor: "rgba(0, 0, 0, 0.5)",
-            zIndex: 1000,
-          },
-        }}
-        onRequestClose={() => setIsOpened(false)}
-      >
-        <div className="w-[80vw] sm:w-[60vw] lg:w-[40vw] overflow-clip relative t-primary">
-          <TOC />
-        </div>
-      </ReactModal>
-    </div>
-  );
-}
-
 function CommentInput({
   id,
   onRefresh,
@@ -523,6 +477,7 @@ type Comment = {
   guestName?: string;
   guestEmail?: string;
   guestWebsite?: string;
+  approved?: number | boolean;
 };
 
 function Comments({ id }: { id: string }) {
@@ -614,6 +569,15 @@ function CommentItem({
           });
       })
   }
+  function approveComment() {
+    client.comment.approve(comment.id).then(({ error }) => {
+      if (error) {
+        showAlert(error.value as string);
+      } else {
+        showAlert(t("comment.success"), onRefresh);
+      }
+    });
+  }
   return (
     <div className="flex flex-row items-start rounded-xl mt-2">
       <img
@@ -644,6 +608,15 @@ function CommentItem({
           </span>
         </div>
         <p className="t-primary break-words">{comment.content}</p>
+        {profile?.permission && !comment.approved && (
+          <button
+            type="button"
+            className="mt-2 self-start rounded-full bg-theme px-3 py-1 text-sm text-white"
+            onClick={approveComment}
+          >
+            {t("approve", { defaultValue: "Approve" })}
+          </button>
+        )}
         <div className="flex flex-row justify-end">
           {(profile?.permission || (comment.user && profile?.id == comment.user.id)) && (
             <Popup

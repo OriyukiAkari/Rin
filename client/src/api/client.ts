@@ -1,7 +1,6 @@
 // API Client for Rin - Type-safe HTTP client to replace Eden
 // This client provides a clean, type-safe interface for all backend API endpoints
 
-import { getAuthToken } from "../utils/auth";
 import { endpoint } from "../config";
 
 // Import shared types
@@ -33,6 +32,7 @@ import type {
   AuthStatus,
   LoginRequest,
   LoginResponse,
+  WordPressImportResponse,
 } from "@rin/api";
 
 export interface SettingsConfigResponse {
@@ -155,6 +155,7 @@ export type {
   AuthStatus,
   LoginRequest,
   LoginResponse,
+  WordPressImportResponse,
 } from "@rin/api";
 
 
@@ -175,12 +176,6 @@ class HttpClient {
       Accept: "application/json",
       ...options?.headers,
     };
-
-    // Add auth token if available
-    const token = getAuthToken();
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
-    }
 
     if (body !== undefined && !(body instanceof FormData)) {
       headers["Content-Type"] = "application/json";
@@ -361,6 +356,10 @@ class CommentAPI {
   // DELETE /api/comment/:id
   async delete(id: number): Promise<ApiResponse<void>> {
     return this.http.delete<void>(`/api/comment/${id}`);
+  }
+
+  async approve(id: number): Promise<ApiResponse<void>> {
+    return this.http.post<void>(`/api/comment/approve/${id}`);
   }
 }
 
@@ -615,8 +614,10 @@ class WordPressAPI {
   constructor(private http: HttpClient) {}
 
   // POST /api/wp
-  async import(xml: string): Promise<ApiResponse<{ imported: number }>> {
-    return this.http.post<{ imported: number }>("/api/wp", { xml });
+  async import(file: File): Promise<ApiResponse<WordPressImportResponse>> {
+    const formData = new FormData();
+    formData.append("data", file);
+    return this.http.post<WordPressImportResponse>("/api/wp", formData);
   }
 }
 

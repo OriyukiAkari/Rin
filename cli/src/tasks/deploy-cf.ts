@@ -1,8 +1,9 @@
 import { $ } from "bun";
-import { readdir, unlink } from "node:fs/promises";
+import { appendFile, mkdir, readdir, unlink } from "node:fs/promises";
 import stripIndent from "strip-indent";
 import { fixTopField, getMigrationFileVersion, getMigrationVersion, isInfoExist, updateMigrationVersion } from "../lib/db-migration";
 const bunExec = process.execPath;
+const toml = (value: string | undefined) => JSON.stringify(value || "");
 
 function env(name: string, defaultValue?: string, required = false) {
   const value = process.env[name] || defaultValue;
@@ -14,12 +15,20 @@ function env(name: string, defaultValue?: string, required = false) {
 
 const renv = (name: string, defaultValue?: string) => env(name, defaultValue, true)!;
 
+function requireCloudflareResourceName(value: string, label: string) {
+  if (!/^[A-Za-z0-9_-]+$/.test(value)) {
+    throw new Error(`${label} contains unsupported characters`);
+  }
+  return value;
+}
+
 const WORKER_SECRET_KEYS = [
   "JWT_SECRET",
   "ADMIN_USERNAME",
   "ADMIN_PASSWORD",
   "RIN_GITHUB_CLIENT_ID",
   "RIN_GITHUB_CLIENT_SECRET",
+  "RIN_GITHUB_ADMIN_ID",
   "S3_ACCESS_KEY_ID",
   "S3_SECRET_ACCESS_KEY",
 ] as const;
@@ -100,10 +109,10 @@ export function buildWranglerQueueConfig(taskQueueName: string, preview = false)
   return stripIndent(`
     [[queues.producers]]
     binding = "TASK_QUEUE"
-    queue = "${taskQueueName}"
+    queue = ${toml(taskQueueName)}
 
     [[queues.consumers]]
-    queue = "${taskQueueName}"
+    queue = ${toml(taskQueueName)}
     max_batch_size = 1
     max_batch_timeout = 5
   `);
@@ -142,10 +151,14 @@ export async function runCloudflareDeploy(target: "all" | "server" | "client" = 
     return;
   }
 
-  const dbName = renv("DB_NAME", "rin");
-  const workerName = renv("WORKER_NAME", "rin-server");
-  const taskQueueName = env("TASK_QUEUE_NAME", env("AI_SUMMARY_QUEUE_NAME", `${workerName}-tasks`)) ?? `${workerName}-tasks`;
-  const r2BucketName = env("R2_BUCKET_NAME", "");
+  const dbName = requireCloudflareResourceName(renv("DB_NAME", "rin"), "DB_NAME");
+  const workerName = requireCloudflareResourceName(renv("WORKER_NAME", "rin-server"), "WORKER_NAME");
+  const taskQueueName = requireCloudflareResourceName(
+    env("TASK_QUEUE_NAME", env("AI_SUMMARY_QUEUE_NAME", `${workerName}-tasks`)) ?? `${workerName}-tasks`,
+    "TASK_QUEUE_NAME",
+  );
+  const r2BucketNameValue = env("R2_BUCKET_NAME", "");
+  const r2BucketName = r2BucketNameValue ? requireCloudflareResourceName(r2BucketNameValue, "R2_BUCKET_NAME") : "";
   const s3Endpoint = env("S3_ENDPOINT", "");
   const s3AccessHost = env("S3_ACCESS_HOST", "");
   const s3Bucket = env("S3_BUCKET", "");
@@ -162,6 +175,9 @@ export async function runCloudflareDeploy(target: "all" | "server" | "client" = 
   const avatar = env("AVATAR", "");
   const pageSize = env("PAGE_SIZE", "5");
   const rssEnable = env("RSS_ENABLE", "false");
+  const siteUrl = env("SITE_URL", "");
+  const corsAllowedOrigins = env("CORS_ALLOWED_ORIGINS", "");
+  const visitRetentionDays = env("VISIT_RETENTION_DAYS", "30");
 
   let finalS3Endpoint = s3Endpoint;
   let finalS3Bucket = s3Bucket;
@@ -183,12 +199,12 @@ export async function runCloudflareDeploy(target: "all" | "server" | "client" = 
   const hasServerBuild = await serverDistIndex.exists();
   const serverMain = hasServerBuild ? "dist/server/_worker.js" : "server/src/_worker.ts";
 
-  Bun.write(
+  await Bun.write(
     "wrangler.toml",
     stripIndent(`
       #:schema node_modules/wrangler/config-schema.json
-      name = "${workerName}"
-      main = "${serverMain}"
+      name = ${toml(workerName)}
+      main = ${toml(serverMain)}
       compatibility_date = "2026-01-20"
 
       [assets]
@@ -198,22 +214,25 @@ export async function runCloudflareDeploy(target: "all" | "server" | "client" = 
       ${buildWranglerObservabilityConfig(preview)}
 
       [vars]
-      S3_FOLDER = "${s3Folder}"
-      S3_CACHE_FOLDER="${s3CacheFolder}"
-      S3_REGION = "${s3Region}"
-      S3_ENDPOINT = "${finalS3Endpoint}"
-      S3_ACCESS_HOST = "${finalS3AccessHost}"
-      S3_BUCKET = "${finalS3Bucket}"
-      S3_FORCE_PATH_STYLE = "${s3ForcePathStyle}"
-      WEBHOOK_URL = "${webhookUrl}"
-      RSS_TITLE = "${rssTitle}"
-      RSS_DESCRIPTION = "${rssDescription}"
-      CACHE_STORAGE_MODE = "${cacheStorageMode}"
-      NAME = "${name}"
-      DESCRIPTION = "${description}"
-      AVATAR = "${avatar}"
-      PAGE_SIZE = "${pageSize}"
-      RSS_ENABLE = "${rssEnable}"
+      S3_FOLDER = ${toml(s3Folder)}
+      S3_CACHE_FOLDER = ${toml(s3CacheFolder)}
+      S3_REGION = ${toml(s3Region)}
+      S3_ENDPOINT = ${toml(finalS3Endpoint)}
+      S3_ACCESS_HOST = ${toml(finalS3AccessHost)}
+      S3_BUCKET = ${toml(finalS3Bucket)}
+      S3_FORCE_PATH_STYLE = ${toml(s3ForcePathStyle)}
+      WEBHOOK_URL = ${toml(webhookUrl)}
+      RSS_TITLE = ${toml(rssTitle)}
+      RSS_DESCRIPTION = ${toml(rssDescription)}
+      CACHE_STORAGE_MODE = ${toml(cacheStorageMode)}
+      NAME = ${toml(name)}
+      DESCRIPTION = ${toml(description)}
+      AVATAR = ${toml(avatar)}
+      PAGE_SIZE = ${toml(pageSize)}
+      RSS_ENABLE = ${toml(rssEnable)}
+      SITE_URL = ${toml(siteUrl)}
+      CORS_ALLOWED_ORIGINS = ${toml(corsAllowedOrigins)}
+      VISIT_RETENTION_DAYS = ${toml(visitRetentionDays)}
 
       [placement]
       mode = "smart"
@@ -240,28 +259,28 @@ export async function runCloudflareDeploy(target: "all" | "server" | "client" = 
     (item) => item.name === dbName,
   );
   if (listJson) {
-    await $`echo ${stripIndent(`
+    await appendFile("wrangler.toml", stripIndent(`
       [[d1_databases]]
       binding = "DB"
-      database_name = "${listJson.name}"
-      database_id = "${listJson.uuid}"
-    `)} >> wrangler.toml`.quiet();
+      database_name = ${toml(listJson.name)}
+      database_id = ${toml(listJson.uuid)}
+    `));
   }
 
-  await $`echo ${stripIndent(`
+  await appendFile("wrangler.toml", stripIndent(`
     [ai]
     binding = "AI"
-  `)} >> wrangler.toml`.quiet();
+  `));
 
-  await $`echo ${buildWranglerQueueConfig(taskQueueName, preview)} >> wrangler.toml`.quiet();
+  await appendFile("wrangler.toml", buildWranglerQueueConfig(taskQueueName, preview));
 
   if (r2BucketName) {
-    await $`echo ${stripIndent(`
+    await appendFile("wrangler.toml", stripIndent(`
       [[r2_buckets]]
       binding = "R2_BUCKET"
-      bucket_name = "${r2BucketName}"
-      preview_bucket_name = "${r2BucketName}"
-    `)} >> wrangler.toml`.quiet();
+      bucket_name = ${toml(r2BucketName)}
+      preview_bucket_name = ${toml(r2BucketName)}
+    `));
   }
 
   const migrationVersion = await getMigrationVersion("remote", dbName);
@@ -277,15 +296,19 @@ export async function runCloudflareDeploy(target: "all" | "server" | "client" = 
       return (getMigrationFileVersion(left) || 0) - (getMigrationFileVersion(right) || 0);
     });
 
+  if (sqlFiles.length > 0) {
+    await mkdir("backups", { recursive: true });
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const backupFile = `backups/${dbName}-${timestamp}.sql`;
+    await $`${bunExec} x wrangler d1 export ${dbName} --remote --output ${backupFile}`;
+    console.log(`Backed up D1 to ${backupFile}`);
+  }
+
   for (const file of sqlFiles) {
     await $`${bunExec} x wrangler d1 execute ${dbName} --remote --file ./server/sql/${file} -y`;
     console.log(`Migrated ${file}`);
-  }
-  if (sqlFiles.length > 0) {
-    const lastVersion = getMigrationFileVersion(sqlFiles[sqlFiles.length - 1] || "");
-    if (lastVersion !== null) {
-      await updateMigrationVersion("remote", dbName, lastVersion);
-    }
+    const version = getMigrationFileVersion(file);
+    if (version !== null) await updateMigrationVersion("remote", dbName, version);
   }
   await fixTopField("remote", dbName, infoExists);
 

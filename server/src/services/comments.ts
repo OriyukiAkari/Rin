@@ -1,21 +1,41 @@
 import { Hono } from "hono";
 import type { AppContext } from "../core/hono-types";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { comments, feeds, users } from "../db/schema";
 import { profileAsync } from "../core/server-timing";
 import { notify } from "../utils/webhook";
 import { resolveWebhookConfig } from "./config-helpers";
+import { enforceRateLimit, requestClientIdentifier } from "../utils/rate-limit";
+import { commentCreateSchema, validateSchema } from "@rin/api";
+
+function validEmail(value: string) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function validWebsite(value: string) {
+    try {
+        const url = new URL(value);
+        return url.protocol === 'http:' || url.protocol === 'https:';
+    } catch {
+        return false;
+    }
+}
 
 export function CommentService(): Hono {
     const app = new Hono();
 
     app.get('/:feed', async (c: AppContext) => {
         const db = c.get('db');
+        const admin = c.get('admin');
         const feedId = parseInt(c.req.param('feed'));
         
         const comment_list = await profileAsync(c, 'comment_list_db', () => db.query.comments.findMany({
-            where: eq(comments.feedId, feedId),
-            columns: { feedId: false, userId: false },
+            where: admin
+                ? eq(comments.feedId, feedId)
+                : and(eq(comments.feedId, feedId), eq(comments.approved, 1)),
+            columns: admin
+                ? { feedId: false, userId: false }
+                : { feedId: false, userId: false, guestEmail: false },
             with: {
                 user: {
                     columns: { id: true, username: true, avatar: true, permission: true }
@@ -36,7 +56,6 @@ export function CommentService(): Hono {
                 ...rest,
                 user: null,
                 guestName: rest.guestName || "",
-                guestEmail: rest.guestEmail || "",
                 guestWebsite: rest.guestWebsite || "",
             };
         });
@@ -48,18 +67,43 @@ export function CommentService(): Hono {
         const db = c.get('db');
         const env = c.get('env');
         const serverConfig = c.get('serverConfig');
+        const clientConfig = c.get('clientConfig');
         const uid = c.get('uid');
         const feedId = parseInt(c.req.param('feed'));
         const body = await profileAsync(c, 'comment_create_parse', () => c.req.json());
+        const validation = validateSchema(commentCreateSchema, body);
+        if (!validation.success) return c.text(validation.errors[0], 400);
         const { content, guestName, guestEmail, guestWebsite } = body;
         
-        if (!content) {
+        if (typeof content !== 'string' || !content.trim() || content.length > 5000) {
             return c.text('Content is required', 400);
+        }
+
+        const commentsEnabled = await clientConfig.getOrDefault<unknown>('comment.enabled', true);
+        if (commentsEnabled === false || commentsEnabled === 'false') {
+            return c.text('Comments are disabled', 403);
+        }
+
+        const clientIdentifier = requestClientIdentifier(c.req.raw.headers);
+        const allowed = await enforceRateLimit(
+            db,
+            env,
+            uid ? 'comment-user' : 'comment-guest',
+            `${clientIdentifier}:${uid || 'guest'}`,
+            uid ? 20 : 5,
+            600,
+        );
+        if (!allowed) {
+            return c.text('Too many comments', 429);
         }
         
         const exist = await profileAsync(c, 'comment_create_feed', () => db.query.feeds.findFirst({ where: eq(feeds.id, feedId) }));
         if (!exist) {
             return c.text('Feed not found', 400);
+        }
+
+        if (exist.draft === 1 && !c.get('admin')) {
+            return c.text('Feed not found', 404);
         }
 
         // 登录用户评论
@@ -72,7 +116,8 @@ export function CommentService(): Hono {
             await db.insert(comments).values({
                 feedId,
                 userId: uid,
-                content
+                content: content.trim(),
+                approved: 1,
             });
 
             const { webhookUrl, webhookMethod, webhookContentType, webhookHeaders, webhookBodyTemplate } =
@@ -103,18 +148,30 @@ export function CommentService(): Hono {
         }
 
         // 游客评论
+        const guestEnabled = await clientConfig.getOrDefault<unknown>('comment.guest.enabled', true);
+        if (guestEnabled === false || guestEnabled === 'false') {
+            return c.text('Guest comments are disabled', 403);
+        }
+
         if (!guestName || !guestName.trim()) {
             return c.text('Guest name is required', 400);
         }
 
+        if (guestName.length > 100 || (guestEmail && (guestEmail.length > 254 || !validEmail(guestEmail))) ||
+            (guestWebsite && (guestWebsite.length > 2048 || !validWebsite(guestWebsite)))) {
+            return c.text('Invalid guest profile', 400);
+        }
+
+        const guestAutoApprove = await clientConfig.getOrDefault<unknown>('comment.guest.auto_approve', false);
+
         await db.insert(comments).values({
             feedId,
             userId: null,
-            content,
+            content: content.trim(),
             guestName: guestName.trim(),
             guestEmail: guestEmail?.trim() || "",
             guestWebsite: guestWebsite?.trim() || "",
-            approved: 1,
+            approved: guestAutoApprove === true || guestAutoApprove === 'true' ? 1 : 0,
         });
 
         const { webhookUrl, webhookMethod, webhookContentType, webhookHeaders, webhookBodyTemplate } =
@@ -141,6 +198,18 @@ export function CommentService(): Hono {
         } catch (error) {
             console.error("Failed to send comment webhook", error);
         }
+        return c.text('OK');
+    });
+
+    app.post('/approve/:id', async (c: AppContext) => {
+        if (!c.get('admin')) {
+            return c.text('Permission denied', 403);
+        }
+        const id = Number.parseInt(c.req.param('id'), 10);
+        if (!Number.isSafeInteger(id) || id <= 0) {
+            return c.text('Invalid comment id', 400);
+        }
+        await c.get('db').update(comments).set({ approved: 1 }).where(eq(comments.id, id));
         return c.text('OK');
     });
 

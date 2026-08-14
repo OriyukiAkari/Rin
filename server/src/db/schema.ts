@@ -1,5 +1,5 @@
 import { relations, sql } from "drizzle-orm";
-import { integer, sqliteTable, text, unique } from "drizzle-orm/sqlite-core";
+import { integer, sqliteTable, text, unique, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 const created_at = integer("created_at", { mode: 'timestamp' }).default(sql`(unixepoch())`).notNull();
 const updated_at = integer("updated_at", { mode: 'timestamp' }).default(sql`(unixepoch())`).notNull();
@@ -19,7 +19,9 @@ export const feeds = sqliteTable("feeds", {
     uid: integer("uid").references(() => users.id).notNull(),
     createdAt: created_at,
     updatedAt: updated_at,
-});
+}, (table) => ({
+    aliasUnique: uniqueIndex("feeds_alias_unique").on(table.alias),
+}));
 
 export const moments = sqliteTable("moments", {
     id: integer("id").primaryKey(),
@@ -71,7 +73,10 @@ export const users = sqliteTable("users", {
     permission: integer("permission").default(0),
     createdAt: created_at,
     updatedAt: updated_at,
-});
+}, (table) => ({
+    usernameUnique: uniqueIndex("users_username_unique").on(table.username),
+    openidUnique: uniqueIndex("users_openid_unique").on(table.openid),
+}));
 
 export const comments = sqliteTable("comments", {
     id: integer("id").primaryKey(),
@@ -81,6 +86,8 @@ export const comments = sqliteTable("comments", {
     guestName: text("guest_name").default(""),
     guestEmail: text("guest_email").default(""),
     guestWebsite: text("guest_website").default(""),
+    // Application writes this field explicitly; keep the historical D1 default
+    // for schema compatibility with upgraded databases.
     approved: integer("approved").default(1).notNull(),
     createdAt: created_at,
     updatedAt: updated_at,
@@ -91,12 +98,23 @@ export const hashtags = sqliteTable("hashtags", {
     name: text("name").notNull(),
     createdAt: created_at,
     updatedAt: updated_at,
-});
+}, (table) => ({
+    nameUnique: uniqueIndex("hashtags_name_unique").on(table.name),
+}));
 
 export const feedHashtags = sqliteTable("feed_hashtags", {
     feedId: integer("feed_id").references(() => feeds.id, { onDelete: 'cascade' }).notNull(),
     hashtagId: integer("hashtag_id").references(() => hashtags.id, { onDelete: 'cascade' }).notNull(),
     createdAt: created_at,
+    updatedAt: updated_at,
+}, (table) => ({
+    feedHashtagUnique: unique().on(table.feedId, table.hashtagId),
+}));
+
+export const requestLimits = sqliteTable("request_limits", {
+    key: text("key").primaryKey(),
+    requestCount: integer("request_count").default(0).notNull(),
+    expiresAt: integer("expires_at", { mode: 'timestamp' }).notNull(),
     updatedAt: updated_at,
 });
 

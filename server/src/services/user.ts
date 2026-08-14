@@ -1,10 +1,12 @@
 import { Hono } from "hono";
-import { eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { getCookie, setCookie, deleteCookie } from "hono/cookie";
 import type { AppContext } from "../core/hono-types";
 import { profileAsync } from "../core/server-timing";
-import { setJWTCookie } from "../core/hono-middleware";
+import { clearJWTCookie, setJWTCookie } from "../core/hono-middleware";
 import { users } from "../db/schema";
+import { parsePublicHttpUrl } from "../utils/public-url";
+import { updateProfileSchema, validateSchema } from "@rin/api";
 import {
     BadRequestError,
     ForbiddenError,
@@ -23,23 +25,23 @@ export function UserService(): Hono {
             throw new BadRequestError('GitHub OAuth is not configured');
         }
 
-        const referer = c.req.header('referer');
-
-        if (!referer) {
-            throw new BadRequestError('Referer header is required');
-        }
-
-        // Build callback URL from referer
-        const refererUrl = new URL(referer);
-        const callbackUrl = new URL('/callback', refererUrl.origin);
+        const requestUrl = new URL(c.req.url);
+        const callbackUrl = new URL('/callback', requestUrl.origin);
+        const secure = requestUrl.protocol === 'https:';
 
         setCookie(c, 'redirect_to', callbackUrl.toString(), {
             path: '/',
+            httpOnly: true,
+            secure,
+            sameSite: 'Lax',
         });
 
         const genState = await profileAsync(c, 'user_oauth_state', () => Promise.resolve(oauth2.generateState()));
         setCookie(c, 'state', genState, {
             path: '/',
+            httpOnly: true,
+            secure,
+            sameSite: 'Lax',
         });
 
         return c.redirect(oauth2.createRedirectUrl(genState, "GitHub"), 302);
@@ -58,16 +60,13 @@ export function UserService(): Hono {
         const query = c.req.query();
         const stateCookie = getCookie(c, 'state');
 
-        console.log('param_state', query.state);
-        console.log('cookie_state', stateCookie);
-
         // Verify state to prevent CSRF attacks
         if (query.state !== stateCookie) {
             throw new BadRequestError('Invalid state parameter');
         }
 
         // Clear state cookie
-        deleteCookie(c, 'state');
+        deleteCookie(c, 'state', { path: '/' });
 
         // Exchange code for access token
         const gh_token = await profileAsync(c, 'user_oauth_authorize', () => oauth2.authorize("GitHub", query.code));
@@ -84,14 +83,21 @@ export function UserService(): Hono {
             },
         }));
 
+        if (!response.ok) {
+            throw new BadRequestError('Failed to load GitHub profile');
+        }
+
         const user: any = await profileAsync(c, 'user_github_parse', () => response.json());
+        if (!user?.id || !(user.name || user.login) || !user.avatar_url) {
+            throw new BadRequestError('Invalid GitHub profile');
+        }
         const profile: {
             openid: string;
             username: string;
             avatar: string;
             permission: number | null;
         } = {
-            openid: user.id,
+            openid: String(user.id),
             username: user.name || user.login,
             avatar: user.avatar_url,
             permission: 0
@@ -106,22 +112,22 @@ export function UserService(): Hono {
 
         if (existingUser) {
             profile.permission = existingUser.permission;
-            await profileAsync(c, 'user_existing_update', () => db.update(users).set(profile).where(eq(users.id, existingUser.id)));
+            await profileAsync(c, 'user_existing_update', () => db.update(users).set({
+                avatar: profile.avatar,
+                openid: profile.openid,
+                permission: profile.permission,
+            }).where(eq(users.id, existingUser.id)));
             authToken = await profileAsync(c, 'user_existing_token', () => jwt.sign({ id: existingUser.id }));
             setJWTCookie(c, authToken);
-            // Store token in cookie for frontend to read (not HttpOnly)
-            setCookie(c, 'auth_token', authToken, {
-                expires: new Date(Date.now() + 1000 * 60 * 60 * 24 * 7),
-                path: '/',
-                sameSite: 'Lax',
-            });
         } else {
-            // If no user exists, check if this is the first user
-            const anyUserCheck = await profileAsync(c, 'user_first_lookup', () => db.query.users.findMany({ limit: 1 }));
-            if (anyUserCheck.length === 0) {
+            if (c.env.RIN_GITHUB_ADMIN_ID && profile.openid === c.env.RIN_GITHUB_ADMIN_ID) {
                 profile.permission = 1;
             }
 
+            const usernameExists = await db.query.users.findFirst({ where: eq(users.username, profile.username) });
+            if (usernameExists) {
+                profile.username = `${profile.username.slice(0, 60)}-${profile.openid}`;
+            }
             const result = await profileAsync(c, 'user_insert', () => db.insert(users).values(profile).returning({ insertedId: users.id }));
             if (!result || result.length === 0) {
                 throw new InternalServerError('Failed to register user');
@@ -129,19 +135,14 @@ export function UserService(): Hono {
 
             authToken = await profileAsync(c, 'user_insert_token', () => jwt.sign({ id: result[0].insertedId }));
             setJWTCookie(c, authToken);
-            // Store token in cookie for frontend to read (not HttpOnly)
-            setCookie(c, 'auth_token', authToken, {
-                expires: new Date(Date.now() + 1000 * 60 * 60 * 24 * 7),
-                path: '/',
-                sameSite: 'Lax',
-            });
         }
 
         const redirectTo = getCookie(c, 'redirect_to');
-        const redirect_url = new URL(redirectTo || '/');
-        // Add token to URL for frontend to store (for cross-domain auth)
-        if (authToken) {
-            redirect_url.searchParams.set('token', authToken);
+        deleteCookie(c, 'redirect_to', { path: '/' });
+        const requestOrigin = new URL(c.req.url).origin;
+        const redirect_url = new URL(redirectTo || '/callback', requestOrigin);
+        if (redirect_url.origin !== requestOrigin) {
+            throw new BadRequestError('Invalid OAuth redirect target');
         }
         return c.redirect(redirect_url.toString(), 302);
     });
@@ -172,12 +173,7 @@ export function UserService(): Hono {
 
     // POST /user/logout - Logout user
     app.post('/logout', async (c: AppContext) => {
-        deleteCookie(c, 'token', {
-            path: '/',
-            httpOnly: true,
-            secure: true,
-            sameSite: 'Lax',
-        });
+        clearJWTCookie(c);
         deleteCookie(c, 'auth_token', {
             path: '/',
             sameSite: 'Lax',
@@ -189,21 +185,46 @@ export function UserService(): Hono {
     app.put('/profile', async (c: AppContext) => {
         const uid = c.get('uid');
         const db = c.get('db');
-        const body = await profileAsync(c, 'user_profile_parse', () => c.req.json());
 
         if (!uid) {
             throw new ForbiddenError('Authentication required');
         }
 
+        const body = await profileAsync(c, 'user_profile_parse', () => c.req.json());
+
+        const validation = validateSchema(updateProfileSchema, body);
+        if (!validation.success) throw new BadRequestError(validation.errors[0]);
+
         const { username, avatar } = body as { username?: string; avatar?: string };
 
-        if (!username && !avatar) {
+        if (username === undefined && avatar === undefined) {
             throw new BadRequestError('At least one field (username or avatar) is required');
         }
 
         const updateData: { username?: string; avatar?: string } = {};
-        if (username) updateData.username = username;
-        if (avatar) updateData.avatar = avatar;
+        if (username !== undefined) {
+            if (typeof username !== 'string' || !username.trim() || username.trim().length > 80) {
+                throw new BadRequestError('Invalid username');
+            }
+            const normalizedUsername = username.trim();
+            const duplicate = await db.query.users.findFirst({
+                where: and(eq(users.username, normalizedUsername), ne(users.id, uid)),
+            });
+            if (duplicate) throw new BadRequestError('Username already exists');
+            updateData.username = normalizedUsername;
+        }
+        if (avatar !== undefined) {
+            if (typeof avatar !== 'string' || avatar.length > 2048) {
+                throw new BadRequestError('Invalid avatar URL');
+            }
+            if (avatar === '') {
+                updateData.avatar = '';
+            } else {
+                const normalizedAvatar = parsePublicHttpUrl(avatar);
+                if (!normalizedAvatar) throw new BadRequestError('Invalid avatar URL');
+                updateData.avatar = normalizedAvatar;
+            }
+        }
 
         await profileAsync(c, 'user_profile_update', () => db.update(users).set(updateData).where(eq(users.id, uid)));
 

@@ -142,22 +142,24 @@ export const authMiddleware = createMiddleware<{
 
 // Helper to set JWT cookie
 export function setJWTCookie(c: AppContext, token: string) {
+    const secure = new URL(c.req.url).protocol === 'https:';
     setCookie(c, 'token', token, {
         expires: new Date(Date.now() + 1000 * 60 * 60 * 24 * 7),
         path: '/',
         httpOnly: true,
-        secure: true,
+        secure,
         sameSite: 'Lax',
     });
 }
 
 // Helper to clear JWT cookie
 export function clearJWTCookie(c: AppContext) {
+    const secure = new URL(c.req.url).protocol === 'https:';
     setCookie(c, 'token', '', {
         expires: new Date(0),
         path: '/',
         httpOnly: true,
-        secure: true,
+        secure,
         sameSite: 'Lax',
     });
 }

@@ -89,7 +89,6 @@ describe("PasswordAuthService", () => {
 
       expect(result.error).toBeUndefined();
       expect(result.data?.success).toBe(true);
-      expect(result.data?.token).toBeDefined();
       expect(result.data?.user.username).toBe("admin");
       expect(result.data?.user.permission).toBe(true);
     });
@@ -110,6 +109,7 @@ describe("PasswordAuthService", () => {
       expect(dbResult.length).toBe(1);
       expect(dbResult[0].username).toBe("admin");
       expect(dbResult[0].permission).toBe(1);
+      expect(dbResult[0].password).toStartWith("pbkdf2_sha256$");
     });
 
     it("should reject invalid admin password", async () => {
@@ -140,6 +140,8 @@ describe("PasswordAuthService", () => {
       expect(result.data?.success).toBe(true);
       expect(result.data?.user.username).toBe("regularuser");
       expect(result.data?.user.permission).toBe(false);
+      const upgraded = sqlite.prepare("SELECT password FROM users WHERE id = 2").get() as { password: string };
+      expect(upgraded.password).toStartWith("pbkdf2_sha256$");
     });
 
     it("should reject non-existent user", async () => {

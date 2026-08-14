@@ -23,6 +23,34 @@ which automatically generates release notes from commit messages.
 
 ### Security
 
+## [v1.0.0] - 2026-08-14
+
+### Added
+
+- Added D1-backed login/comment rate limiting, guest-comment moderation, runtime request-schema validation, and migration `0011` for uniqueness and request-limit storage.
+- Added a pre-migration remote D1 backup step and browser CSP/security headers.
+
+### Changed
+
+- Authentication now uses seven-day HttpOnly cookie sessions. Passwords use salted PBKDF2-SHA256 and legacy SHA-256 records upgrade after a successful login.
+- GitHub OAuth administrator assignment is explicit through `RIN_GITHUB_ADMIN_ID`; the first OAuth user is no longer promoted.
+- Client pages are route-split, cache writes are targeted, RSS scheduling uses `SITE_URL`, and all generated Wrangler configurations use the same compatibility date.
+- Guest comments remain pending by default. Uploads are restricted to administrators and supported image types.
+
+### Fixed
+
+- Fixed OAuth Referer trust and token leakage, reflected credentialed CORS, search cache visibility leaks, first-visitor UV undercounting, WordPress owner/transport mismatches, duplicate data races, unsafe friend checks, and migration version drift.
+- Fixed guest email disclosure, ineffective comment settings, raw-IP retention, deploy TOML injection risks, test-log noise, and the no-op CI repository hygiene check.
+
+### Security
+
+- Raw Markdown HTML and custom footer HTML are sanitized; footer scripts are no longer executed.
+- Cross-origin writes are origin-checked, public network fetches block private targets and unsafe redirects, and static responses prevent framing and unrestricted scripts.
+
+### Upgrade notes
+
+- Apply `server/sql/0011.sql`, rotate `JWT_SECRET`, configure `RIN_GITHUB_ADMIN_ID` for GitHub administration, and review guest-comment/footer behavior. See `docs/v1.0-hardening.md`.
+
 ## [v0.3.0] - 2026-03-12
 
 ### Overview

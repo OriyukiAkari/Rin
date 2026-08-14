@@ -31,7 +31,8 @@ export function createJWT(secret: string | Uint8Array | KeyLike): JWTUtils {
         sign: async (payload: any) => {
             const jwt = new SignJWT(payload)
                 .setProtectedHeader({ alg })
-                .setIssuedAt();
+                .setIssuedAt()
+                .setExpirationTime("7d");
             
             return jwt.sign(key);
         },

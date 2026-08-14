@@ -3,6 +3,14 @@ import type { AppContext } from "../core/hono-types";
 import { profileAsync } from "../core/server-timing";
 import { getStorageObject, putStorageObject } from "../utils/storage";
 
+const MAX_UPLOAD_SIZE = 10 * 1024 * 1024;
+const ALLOWED_UPLOAD_TYPES = new Map([
+    ["image/jpeg", "jpg"],
+    ["image/png", "png"],
+    ["image/gif", "gif"],
+    ["image/webp", "webp"],
+]);
+
 function buf2hex(buffer: ArrayBuffer) {
     return [...new Uint8Array(buffer)]
         .map(x => x.toString(16).padStart(2, '0'))
@@ -15,20 +23,36 @@ export function StorageService(): Hono {
     // POST /storage
     app.post('/', async (c: AppContext) => {
         const uid = c.get('uid');
+        const admin = c.get('admin');
         const env = c.get('env');
-        
-        const body = await profileAsync(c, 'storage_parse', () => c.req.parseBody());
-        const key = body.key as string;
-        const file = body.file as File;
-        
+
         if (!uid) {
             return c.text('Unauthorized', 401);
         }
+
+        if (!admin) {
+            return c.text('Permission denied', 403);
+        }
+
+        const body = await profileAsync(c, 'storage_parse', () => c.req.parseBody());
+        const file = body.file as File;
+
+        if (!file || typeof file.arrayBuffer !== 'function') {
+            return c.text('File is required', 400);
+        }
+
+        if (file.size <= 0 || file.size > MAX_UPLOAD_SIZE) {
+            return c.text('Invalid file size', 400);
+        }
+
+        const suffix = ALLOWED_UPLOAD_TYPES.get(file.type);
+        if (!suffix) {
+            return c.text('Disallowed file type', 400);
+        }
         
-        const suffix = key.includes(".") ? key.split('.').pop() : "";
         const fileBuffer = await profileAsync(c, 'storage_file_buffer', () => file.arrayBuffer());
         const hashArray = await profileAsync(c, 'storage_hash', () => crypto.subtle.digest(
-            { name: 'SHA-1' },
+            { name: 'SHA-256' },
             fileBuffer
         ));
         const hash = buf2hex(hashArray);

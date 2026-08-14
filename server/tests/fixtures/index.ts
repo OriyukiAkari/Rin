@@ -154,6 +154,13 @@ export function createMockDB() {
 
         CREATE INDEX IF NOT EXISTS idx_cache_type ON cache(type);
         CREATE INDEX IF NOT EXISTS idx_cache_key ON cache(key);
+
+        CREATE TABLE IF NOT EXISTS request_limits (
+            key TEXT PRIMARY KEY NOT NULL,
+            request_count INTEGER DEFAULT 0 NOT NULL,
+            expires_at INTEGER NOT NULL,
+            updated_at INTEGER DEFAULT (unixepoch()) NOT NULL
+        );
     `);
 
     return { db, sqlite };

@@ -27,7 +27,7 @@ export const feedUpdateSchema = t.Object({
   alias: t.String({ optional: true }),
   content: t.String({ optional: true }),
   summary: t.String({ optional: true }),
-  listed: t.Boolean(),
+  listed: t.Boolean({ optional: true }),
   draft: t.Boolean({ optional: true }),
   createdAt: t.Date({ optional: true }),
   tags: t.Array(t.String(), { optional: true }),
@@ -79,10 +79,10 @@ export const friendCreateSchema = t.Object({
 });
 
 export const friendUpdateSchema = t.Object({
-  name: t.String(),
-  desc: t.String(),
+  name: t.String({ optional: true }),
+  desc: t.String({ optional: true }),
   avatar: t.String({ optional: true }),
-  url: t.String(),
+  url: t.String({ optional: true }),
   accepted: t.Numeric({ optional: true }),
   sort_order: t.Numeric({ optional: true }),
 });

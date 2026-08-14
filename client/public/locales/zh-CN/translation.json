@@ -299,6 +299,14 @@
       "enable": {
         "desc": "开启/关闭文章底部评论入口与评论区",
         "title": "启用评论"
+      },
+      "guest_enable": {
+        "desc": "允许未登录访客提交评论",
+        "title": "允许访客评论"
+      },
+      "guest_auto_approve": {
+        "desc": "访客评论不经管理员审核直接公开（不推荐）",
+        "title": "自动公开访客评论"
       }
     },
     "counter": {

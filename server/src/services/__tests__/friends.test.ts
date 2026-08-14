@@ -88,7 +88,7 @@ describe('FriendService', () => {
                 body: JSON.stringify({
                     name: 'New Friend',
                     desc: 'Description',
-                    avatar: 'avatar.png',
+                    avatar: 'https://example.com/avatar.png',
                     url: 'https://example.com'
                 }),
             }, env);
@@ -106,7 +106,7 @@ describe('FriendService', () => {
                 body: JSON.stringify({
                     name: 'New Friend',
                     desc: 'Description',
-                    avatar: 'avatar.png',
+                    avatar: 'https://example.com/avatar.png',
                     url: 'https://example.com'
                 }),
             }, env);

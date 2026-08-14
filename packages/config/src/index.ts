@@ -13,6 +13,8 @@ export const CLIENT_CONFIG_DEFAULTS = new Map(
     "feed.card_variant": "default",
     "theme.color": "#fc466b",
     "comment.enabled": true,
+    "comment.guest.enabled": true,
+    "comment.guest.auto_approve": false,
     "login.enabled": true,
     "site.name": "Rin",
     "site.description": "A lightweight personal blogging system",
@@ -37,7 +39,8 @@ export const CLIENT_CONFIG_ENV_DEFAULTS: Record<string, string> = {
   "site.name": "NAME",
   "site.description": "DESCRIPTION",
   "site.avatar": "AVATAR",
-  "site.page_size": "PAGE_SIZE",
+    "site.page_size": "PAGE_SIZE",
+    "rss": "RSS_ENABLE",
 };
 
 export const AI_CONFIG_PREFIX = "ai_summary.";
