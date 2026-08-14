@@ -9,7 +9,9 @@ import { runSetupDev } from "../tasks/setup-dev";
 const bunExec = process.execPath;
 
 function registerSignalHandlers(processes: Subprocess[]) {
+  let stopping = false;
   const stopAll = () => {
+    stopping = true;
     for (const child of processes) {
       child.kill("SIGTERM");
     }
@@ -17,6 +19,8 @@ function registerSignalHandlers(processes: Subprocess[]) {
 
   process.on("SIGINT", stopAll);
   process.on("SIGTERM", stopAll);
+
+  return () => stopping;
 }
 
 function createViteArgs(port: number) {
@@ -105,12 +109,12 @@ export async function runDevCommand(args: string[]) {
   });
 
   logger.success(`Development entry is http://localhost:${port} (API proxied to ${workerPort})`);
-  registerSignalHandlers([workerProc, clientProc]);
+  const isStopping = registerSignalHandlers([workerProc, clientProc]);
 
   const exitCode = await Promise.race([workerProc.exited, clientProc.exited]);
   workerProc.kill("SIGTERM");
   clientProc.kill("SIGTERM");
-  if (exitCode !== 0) {
+  if (exitCode !== 0 && !isStopping()) {
     throw new Error("Development server exited unexpectedly");
   }
 }

@@ -19,8 +19,6 @@ export async function runSetupDev() {
   const baseRequiredVars = [
     "NAME",
     "AVATAR",
-    "RIN_GITHUB_CLIENT_ID",
-    "RIN_GITHUB_CLIENT_SECRET",
     "JWT_SECRET",
   ];
   const storageRequiredVars = env.R2_BUCKET_NAME
@@ -33,6 +31,21 @@ export async function runSetupDev() {
     console.error("❌ 错误：以下必要环境变量未设置：");
     missingVars.forEach((name) => console.error(`   - ${name}`));
     console.log("\n请编辑 .env.local 文件并添加这些配置\n");
+    process.exit(1);
+  }
+
+  const githubAuthConfigured = Boolean(
+    env.RIN_GITHUB_CLIENT_ID && env.RIN_GITHUB_CLIENT_SECRET,
+  );
+  const passwordAuthConfigured = Boolean(
+    env.ADMIN_USERNAME && env.ADMIN_PASSWORD,
+  );
+
+  if (!githubAuthConfigured && !passwordAuthConfigured) {
+    console.error("❌ 错误：至少需要配置一种登录方式：");
+    console.error("   - RIN_GITHUB_CLIENT_ID + RIN_GITHUB_CLIENT_SECRET");
+    console.error("   - ADMIN_USERNAME + ADMIN_PASSWORD");
+    console.log("\n请编辑 .env.local 文件并添加其中一组配置\n");
     process.exit(1);
   }
 
