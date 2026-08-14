@@ -35,10 +35,13 @@ jobs:
         
       - name: Setup Pages
         uses: actions/configure-pages@v5
+        with:
+          enablement: false
         
       - name: Install dependencies
         working-directory: ./docs
-        run: bun install
+        run: |
+          bun install || (echo "First install failed, clearing cache and retrying..." && rm -rf ~/.bun/install/cache && bun install)
         
       - name: Build with Rspress
         working-directory: ./docs
