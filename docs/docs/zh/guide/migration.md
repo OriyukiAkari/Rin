@@ -38,40 +38,30 @@ GITHUB_CLIENT_SECRET  → RIN_GITHUB_CLIENT_SECRET
 2. 添加带 `RIN_` 前缀的新 Secrets
 3. （可选）删除旧 Secrets
 
-#### 可选：添加账号密码登录
+#### v1.2 认证要求
 
-如果您更喜欢简单的账号密码登录而非 GitHub OAuth：
+账号密码认证已经移除。必须配置 `RIN_GITHUB_CLIENT_ID`、
+`RIN_GITHUB_CLIENT_SECRET` 和创建者的数字 `RIN_GITHUB_ADMIN_ID`。
 
-1. 添加以下 Secrets：
-   - `ADMIN_USERNAME`: 您想要的用户名
-   - `ADMIN_PASSWORD`: 您想要的密码
+### 第三步：保留 Pages 公网入口
 
-### 第三步：移除 Pages（可选但推荐）
+v1.1+ 使用 Cloudflare Pages 托管前端，并由 Service Binding 把 `/api/*`
+转发到非公开 Worker。不要删除 Pages 项目。
 
-自 0.3.0 开始，Rin 改为使用 Workers 托管静态资源，不再依赖 Cloudflare Pages。建议按以下步骤迁移：
+1. **保留 Pages 自定义域**
+   - 进入 Cloudflare Dashboard → Pages → Rin 项目 → 自定义域
+   - 确认博客域名仍绑定在 Pages
 
-1. **解绑 Pages 域名**
-   - 进入 Cloudflare Dashboard → Pages
-   - 选择您的 Pages 项目 → 自定义域
-   - 删除绑定的域名
+2. **移除 Worker 直连路由**
+   - 删除旧的 Worker 自定义域和路由；v1.2 也会设置 `workers_dev = false`
 
-2. **将域名绑定到 Worker**
-   - 进入 Cloudflare Dashboard → Workers & Pages
-   - 选择您的 Worker (`rin-server`)
-   - 点击"触发器" → "添加自定义域"
-   - 输入您的域名并保存
-
-3. **清理多余的域名绑定**
-   - 检查 Worker 的自定义域列表
-   - 删除不需要的绑定（如 `seo/*`、`sub/*` 等）
-
-4. **更新 GitHub OAuth Callback**
+3. **更新 GitHub OAuth Callback**
    - 进入 GitHub → Settings → Developer settings → OAuth Apps
    - 找到您的 OAuth App
    - 将 Authorization callback URL 从：
      - `https://<worker-domain>/user/github/callback`
    - 修改为：
-     - `https://<your-domain>/api/user/github/callback`
+     - `https://<pages-or-blog-domain>/api/user/github/callback`
 
 ### 第四步：更新 Cloudflare API Key 权限
 
@@ -128,12 +118,11 @@ const feeds = await client.feed.list({ page: 1 });
 
 | 旧名称 | 新名称 | 必需 |
 |--------|--------|------|
-| `GITHUB_CLIENT_ID` | `RIN_GITHUB_CLIENT_ID` | 可选* |
-| `GITHUB_CLIENT_SECRET` | `RIN_GITHUB_CLIENT_SECRET` | 可选* |
-| - | `ADMIN_USERNAME` | 可选* |
-| - | `ADMIN_PASSWORD` | 可选* |
+| `GITHUB_CLIENT_ID` | `RIN_GITHUB_CLIENT_ID` | 必需 |
+| `GITHUB_CLIENT_SECRET` | `RIN_GITHUB_CLIENT_SECRET` | 必需 |
+| - | `RIN_GITHUB_ADMIN_ID` | 必需 |
 
-*必须配置至少一种登录方式
+三项 GitHub 配置都必须提供，并且只有配置的创建者能够登录。
 
 ## 迁移后
 

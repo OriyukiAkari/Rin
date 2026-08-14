@@ -312,7 +312,7 @@ export function ConfigService(): Hono {
     // GET /config/:type
     app.get('/:type', async (c: AppContext) => {
         const admin = c.get('admin');
-        const type = c.req.param('type');
+        const type = c.req.param('type') || '';
         
         if (!isConfigType(type)) {
             return c.text('Invalid type', 400);
@@ -370,7 +370,7 @@ export function ConfigService(): Hono {
     // POST /config/:type
     app.post('/:type', async (c: AppContext) => {
         const admin = c.get('admin');
-        const type = c.req.param('type');
+        const type = c.req.param('type') || '';
         
         if (!isConfigType(type)) {
             return c.text('Invalid type', 400);

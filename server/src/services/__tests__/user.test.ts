@@ -52,8 +52,8 @@ describe('UserService', () => {
     async function seedTestData(sqlite: Database) {
         sqlite.exec(`
             INSERT INTO users (id, username, avatar, permission, openid) VALUES 
-                (1, 'user1', 'avatar1.png', 0, 'gh_123'),
-                (2, 'admin', 'admin.png', 1, 'gh_456')
+                (1, 'user1', 'avatar1.png', 0, '123'),
+                (2, 'admin', 'admin.png', 1, '456')
         `);
     }
 
@@ -143,13 +143,13 @@ describe('UserService', () => {
     });
 
     describe('GET /github/callback - GitHub OAuth callback', () => {
-        it('should authenticate existing user', async () => {
+        it('should authenticate the existing creator and preserve admin access', async () => {
             const originalFetch = global.fetch;
             global.fetch = async () => {
                 return new Response(JSON.stringify({
-                    id: 'gh_123',
-                    login: 'user1',
-                    name: 'User One',
+                    id: 456,
+                    login: 'admin',
+                    name: 'Admin',
                     avatar_url: 'https://github.com/avatar.png'
                 }), { status: 200 });
             };
@@ -165,13 +165,16 @@ describe('UserService', () => {
                 expect(res.status).toBe(302);
                 const location = res.headers.get('Location');
                 expect(location).toContain('/callback');
+                const creator = sqlite.prepare("SELECT permission FROM users WHERE openid = '456'").get() as { permission: number };
+                expect(creator.permission).toBe(1);
             } finally {
                 global.fetch = originalFetch;
             }
         });
 
-        it('should not promote the first new GitHub user or expose a token in the redirect', async () => {
+        it('should create the configured creator as an admin without exposing a token in the redirect', async () => {
             sqlite.exec("DELETE FROM users");
+            env.RIN_GITHUB_ADMIN_ID = '789';
             const originalFetch = global.fetch;
             global.fetch = async () => new Response(JSON.stringify({
                 id: 789,
@@ -186,7 +189,27 @@ describe('UserService', () => {
                 expect(res.status).toBe(302);
                 expect(res.headers.get('Location')).toBe('http://localhost/callback');
                 const inserted = sqlite.prepare("SELECT permission FROM users WHERE openid = '789'").get() as { permission: number };
-                expect(inserted.permission).toBe(0);
+                expect(inserted.permission).toBe(1);
+            } finally {
+                global.fetch = originalFetch;
+            }
+        });
+
+        it('should reject any GitHub account other than the configured creator', async () => {
+            const originalFetch = global.fetch;
+            global.fetch = async () => new Response(JSON.stringify({
+                id: 789,
+                login: 'intruder',
+                avatar_url: 'https://avatars.githubusercontent.com/u/789',
+            }), { status: 200 });
+
+            try {
+                const res = await app.request('/github/callback?code=valid_code&state=mock_state', {
+                    headers: { Cookie: 'state=mock_state; redirect_to=http://localhost/callback' },
+                }, env);
+                expect(res.status).toBe(403);
+                expect(sqlite.prepare("SELECT id FROM users WHERE openid = '789'").get()).toBeNull();
+                expect(res.headers.get('Set-Cookie')).not.toContain('token=mock_token_');
             } finally {
                 global.fetch = originalFetch;
             }
@@ -304,6 +327,18 @@ describe('UserService', () => {
             expect(res.status).toBe(200);
             const data = await res.json() as any;
             expect(data).toBeDefined();
+        });
+
+        it('should revoke the current server-side session version', async () => {
+            const before = sqlite.prepare("SELECT auth_version FROM users WHERE id = 1").get() as { auth_version: number };
+            const res = await app.request('/logout', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer mock_token_1' },
+            }, env);
+            const after = sqlite.prepare("SELECT auth_version FROM users WHERE id = 1").get() as { auth_version: number };
+
+            expect(res.status).toBe(200);
+            expect(after.auth_version).toBe(before.auth_version + 1);
         });
     });
 });

@@ -17,7 +17,7 @@ export function SearchService(): Hono<{
     const admin = c.get("admin");
     const page = c.req.query("page");
     const limit = c.req.query("limit");
-    const keyword = decodeURI(c.req.param("keyword"));
+    const keyword = decodeURI(c.req.param("keyword") || "");
     const pageNumber = (page && parseInt(page) > 0 ? parseInt(page) : 1) - 1;
     const limitNumber = limit ? Math.min(parseInt(limit), 50) : 20;
 

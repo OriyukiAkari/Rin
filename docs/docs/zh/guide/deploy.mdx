@@ -40,27 +40,16 @@ ID 随意点击一个自己绑定的域名，进入后在右侧（需要向下�
 |------------|---------------------------------------------|------|
 | `CLOUDFLARE_API_TOKEN` | `ThEApiKeyIsRaNdomStR1ngNearly40CharsLong` | Cloudflare API 令牌 |
 | `CLOUDFLARE_ACCOUNT_ID` | `0123456789abcdef0123456789abcdef`          | Cloudflare 账户 ID |
-| `JWT_SECRET` | 任意随机字符串 | JWT 签名密钥 |
+| `JWT_SECRET` | 至少 32 字节的随机字符串 | JWT 签名密钥 |
+| `RIN_GITHUB_CLIENT_ID` | GitHub OAuth Client ID | GitHub OAuth 应用 |
+| `RIN_GITHUB_CLIENT_SECRET` | GitHub OAuth Client Secret | GitHub OAuth 应用 |
+| `RIN_GITHUB_ADMIN_ID` | 您的 GitHub 数字用户 ID | 唯一允许登录的创建者 |
 
-> **提示**: JWT_SECRET 可以是任意长度的随机字符串，例如：`MySecretKey123!@#`
+> **提示**: 可以使用 `openssl rand -hex 32` 生成 JWT_SECRET。
 
-#### 登录配置 Secrets
+#### 登录安全边界
 
-Rin 目前支持账号密码登录与 Github OAuth 登录，可二选一或同时配置
-
-**账号密码登录（推荐）**
-
-| Secret 名称 | 值 | 说明 |
-|------------|-----|------|
-| `ADMIN_USERNAME` | 您想设置的用户名 | 登录用户名 |
-| `ADMIN_PASSWORD` | 您想设置的密码 | 登录密码 |
-
-
-**GitHub OAuth 登录（可选）**
-
-如果您想使用 GitHub 账号登录，请参考[高级配置](#github-oauth-配置)部分添加 OAuth 配置。
-
-> **提示**: 账号密码登录和 GitHub OAuth 登录可以同时启用，用户可以在登录页面自由选择登录方式。
+v1.2 仅支持创建者 GitHub OAuth。账号密码登录已禁用，其他 GitHub 用户完成授权后也会被服务端拒绝。
 
 ### 第三步：触发部署
 
@@ -78,17 +67,17 @@ Rin 目前支持账号密码登录与 Github OAuth 登录，可二选一或同�
 部署完成后，您可以通过以下地址访问：
 
 - **前端及浏览器 API 同源入口**: `https://rin-client.pages.dev`（或您在 `PAGES_PROJECT_NAME` 中设置的名称）
-- **后端 API**: `https://rin-server.your-account-id.workers.dev`
+- **后端 API**: 不提供独立公网地址，只能通过 Pages Functions 的 Service Binding 访问
 
 浏览器统一使用 Pages 地址访问页面和 `/api/*`。Pages Functions 通过内部 `RIN_API`
-Service Binding 将动态请求转发到 Worker，从而让登录 Cookie 保持同源；Worker 地址主要
-用于诊断，不是正常的浏览器入口。
+Service Binding 将动态请求转发到 Worker，从而让登录 Cookie 保持同源；`workers.dev`
+入口在部署配置中被明确关闭。
 
 ### 第五步：首次登录
 
 1. 访问前端页面
 2. 点击右上角的登录图标
-3. 使用您在 Secrets 中设置的 `ADMIN_USERNAME` 和 `ADMIN_PASSWORD` 登录
+3. 使用与 `RIN_GITHUB_ADMIN_ID` 匹配的 GitHub 账号授权登录
 4. 登录后，点击头像进入 **个人资料** 页面，可以修改昵称和上传头像
 
 ## 发布第一篇文章
@@ -178,9 +167,10 @@ Rin 支持两种存储方式：**Cloudflare R2**（推荐）或 **S3 兼容存�
 
 ### 无法登录
 
-1. 确认 `ADMIN_USERNAME` 和 `ADMIN_PASSWORD` 已正确设置
-2. 检查 Worker 日志查看认证错误
-3. 清除浏览器缓存后重试
+1. 确认三项 GitHub OAuth Secret 都已配置
+2. 确认 `RIN_GITHUB_ADMIN_ID` 是当前 GitHub 账号的数字 ID
+3. 确认回调地址为 `https://your-pages-domain/api/user/github/callback`
+4. 检查 Worker 认证日志，清除浏览器 Cookie 后重试
 
 ### 数据库迁移失败
 

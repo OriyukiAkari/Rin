@@ -40,26 +40,16 @@ Save the token after creation.
 |-------------|-------|-------------|
 | `CLOUDFLARE_API_TOKEN` | `ThEApiKeyIsRaNdomStR1ngNearly40CharsLong` | Cloudflare API Token |
 | `CLOUDFLARE_ACCOUNT_ID` | `0123456789abcdef0123456789abcdef` | Cloudflare Account ID |
-| `JWT_SECRET` | Any random string | JWT signing key |
+| `JWT_SECRET` | Random string of at least 32 bytes | JWT signing key |
+| `RIN_GITHUB_CLIENT_ID` | GitHub OAuth Client ID | GitHub OAuth application |
+| `RIN_GITHUB_CLIENT_SECRET` | GitHub OAuth Client Secret | GitHub OAuth application |
+| `RIN_GITHUB_ADMIN_ID` | Your numeric GitHub user ID | The only creator allowed to log in |
 
-> **Tip**: `JWT_SECRET` can be any random string of any length, for example: `MySecretKey123!@#`
+> **Tip**: Generate `JWT_SECRET` with `openssl rand -hex 32`.
 
-#### Login Configuration Secrets
+#### Login Security Boundary
 
-Rin currently supports username/password login and GitHub OAuth login. You can choose one or configure both.
-
-**Username/Password Login (Recommended)**
-
-| Secret Name | Value | Description |
-|-------------|-------|-------------|
-| `ADMIN_USERNAME` | Your desired username | Login username |
-| `ADMIN_PASSWORD` | Your desired password | Login password |
-
-**GitHub OAuth Login (Optional)**
-
-If you want to use your GitHub account to log in, please refer to the [Advanced Configuration](#github-oauth-configuration) section to add OAuth configuration.
-
-> **Tip**: Username/password login and GitHub OAuth login can be enabled simultaneously. Users can freely choose their preferred login method on the login page.
+v1.2 supports creator-only GitHub OAuth. Password login is disabled, and every other GitHub account is rejected by the server after authorization.
 
 ### Step 3: Trigger Deployment
 
@@ -77,17 +67,17 @@ The deployment process takes approximately 3-5 minutes. You can view the deploym
 After deployment is complete, you can access your blog through the following addresses:
 
 - **Frontend and browser API origin**: `https://rin-client.pages.dev` (or the name set in `PAGES_PROJECT_NAME`)
-- **Backend API**: `https://rin-server.your-account-id.workers.dev`
+- **Backend API**: No independent public URL; it is reachable only through the Pages Functions service binding
 
 The browser uses the Pages address for both UI and `/api/*`. Pages Functions forward dynamic
 requests to the backend with the internal `RIN_API` service binding, so login cookies remain
-same-origin. The Worker address is useful for diagnostics and is not the normal browser entry.
+same-origin. The deployment explicitly disables the `workers.dev` entry.
 
 ### Step 5: First Login
 
 1. Visit the frontend page
 2. Click the login icon in the top right corner
-3. Log in using the `ADMIN_USERNAME` and `ADMIN_PASSWORD` you set in Secrets
+3. Authorize with the GitHub account matching `RIN_GITHUB_ADMIN_ID`
 4. After logging in, click your avatar to enter the **Profile** page, where you can modify your nickname and upload an avatar
 
 ## Publishing Your First Post
@@ -177,9 +167,10 @@ If you want Rin to send comment and friend-link notifications to a bot, chat ser
 
 ### Cannot Log In
 
-1. Confirm that `ADMIN_USERNAME` and `ADMIN_PASSWORD` are set correctly
-2. Check Worker logs for authentication errors
-3. Clear browser cache and try again
+1. Confirm all three GitHub OAuth secrets are configured
+2. Confirm `RIN_GITHUB_ADMIN_ID` is the numeric ID of the GitHub account being used
+3. Confirm the callback URL is `https://your-pages-domain/api/user/github/callback`
+4. Check Worker logs for authentication errors, then clear browser cookies and try again
 
 ### Database Migration Failed
 

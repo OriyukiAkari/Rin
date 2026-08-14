@@ -166,7 +166,7 @@
   "error": {
     "api_url": "Pages 环境变量中 API_URL 应为 Worker 地址，请检查 Pages 环境变量中 API_URL 是否正确",
     "api_url_slash": "Pages 环境变量中 API_URL 应为 Worker 地址，请检查 Pages 环境变量中 API_URL 是否正确，且 API_URL 末尾不能有 /",
-    "github_callback": "GitHub OAuth 回调地址应为 `https://<Worker 地址>/api/user/github/callback`，请检查 GitHub OAuth 回调地址是否正确",
+    "github_callback": "GitHub OAuth 回调地址应为 `https://<Pages 地址>/api/user/github/callback`，请检查 GitHub OAuth 回调地址是否正确",
     "not_found": "页面未找到",
     "permission_denied": "权限不足",
     "title": "错误"
@@ -210,6 +210,7 @@
       "network": "网络错误，请重试"
     },
     "loading": "登录中...",
+    "creator_only": "仅博客创建者可通过 GitHub 登录后台",
     "no_methods": "没有可用的登录方式",
     "oauth_only": "请登录后继续",
     "or": "或",
@@ -617,31 +618,19 @@
           "suggestion": "如果此实例需要交互式后台访问，请在设置中启用登录。"
         },
         "missing": {
-          "impact": "用户可以看到登录入口，但没有任何可用的登录方式。",
-          "summary": "GitHub OAuth 和密码登录都未配置。",
-          "suggestion": "请配置 RIN_GITHUB_CLIENT_ID/RIN_GITHUB_CLIENT_SECRET 或 ADMIN_USERNAME/ADMIN_PASSWORD。"
-        },
-        "default_password": {
-          "impact": "管理员账号仍在使用默认用户名和密码，属于严重安全风险。",
-          "summary": "ADMIN_USERNAME/ADMIN_PASSWORD 仍然是 admin / admin123。",
-          "suggestion": "在公开站点前请立即修改默认用户名或密码。"
-        },
-        "oauth_missing": {
-          "impact": "当前只能使用本地密码账号登录，其他用户无法通过 OAuth 登录并评论。",
-          "summary": "GitHub OAuth 未配置。",
-          "suggestion": "如果希望其他用户登录，请配置 RIN_GITHUB_CLIENT_ID/RIN_GITHUB_CLIENT_SECRET。"
+          "impact": "GitHub OAuth 配置不完整，创建者无法进入后台。",
+          "summary": "仅限创建者的 GitHub OAuth 尚未完整配置。",
+          "suggestion": "请配置 RIN_GITHUB_CLIENT_ID、RIN_GITHUB_CLIENT_SECRET 和创建者的数字 RIN_GITHUB_ADMIN_ID。"
         },
         "ready": {
           "impact": "后台登录可用。",
-          "summary": "OAuth 登录已配置，且当前密码登录未使用默认凭据。",
+          "summary": "仅限创建者的 GitHub OAuth 已配置，密码登录已禁用。",
           "suggestion": "无需处理。"
         },
         "details": {
           "github_configured": "GitHub OAuth：已配置",
           "github_missing": "GitHub OAuth：未配置",
-          "password_configured": "密码登录：已配置",
-          "password_missing": "密码登录：未配置",
-          "password_default": "密码登录：使用默认凭据"
+          "password_missing": "密码登录：已禁用"
         }
       },
       "storage": {

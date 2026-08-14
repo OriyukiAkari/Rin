@@ -1,8 +1,6 @@
 import {
   API_PATHS,
   type AuthStatus,
-  type LoginRequest,
-  type LoginResponse,
   type UpdateProfileRequest,
   type UserProfile,
 } from "@rin/api";
@@ -35,7 +33,4 @@ export class AuthAPI {
     return this.http.get<AuthStatus>(API_PATHS.AUTH_STATUS);
   }
 
-  login(body: LoginRequest) {
-    return this.http.post<LoginResponse>(API_PATHS.AUTH_LOGIN, body);
-  }
 }

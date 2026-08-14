@@ -27,7 +27,7 @@ export function CommentService(): Hono {
     app.get('/:feed', async (c: AppContext) => {
         const db = c.get('db');
         const admin = c.get('admin');
-        const feedId = parseInt(c.req.param('feed'));
+        const feedId = parseInt(c.req.param('feed') || '');
         
         const comment_list = await profileAsync(c, 'comment_list_db', () => db.query.comments.findMany({
             where: admin
@@ -69,7 +69,7 @@ export function CommentService(): Hono {
         const serverConfig = c.get('serverConfig');
         const clientConfig = c.get('clientConfig');
         const uid = c.get('uid');
-        const feedId = parseInt(c.req.param('feed'));
+        const feedId = parseInt(c.req.param('feed') || '');
         const body = await profileAsync(c, 'comment_create_parse', () => c.req.json());
         const validation = validateSchema(commentCreateSchema, body);
         if (!validation.success) return c.text(validation.errors[0], 400);
@@ -205,7 +205,7 @@ export function CommentService(): Hono {
         if (!c.get('admin')) {
             return c.text('Permission denied', 403);
         }
-        const id = Number.parseInt(c.req.param('id'), 10);
+        const id = Number.parseInt(c.req.param('id') || '', 10);
         if (!Number.isSafeInteger(id) || id <= 0) {
             return c.text('Invalid comment id', 400);
         }
@@ -222,7 +222,7 @@ export function CommentService(): Hono {
             return c.text('Unauthorized', 401);
         }
         
-        const id_num = parseInt(c.req.param('id'));
+        const id_num = parseInt(c.req.param('id') || '');
         const comment = await profileAsync(c, 'comment_delete_lookup', () => db.query.comments.findFirst({ where: eq(comments.id, id_num) }));
         
         if (!comment) {

@@ -284,11 +284,11 @@ describe('StorageService', () => {
     });
 
     describe('GET /blob/* - Stream file', () => {
-        it('should stream an R2 object through the blob route', async () => {
+        it('should stream a public image from the configured image folder', async () => {
             const r2Env = createMockEnv({
                 R2_BUCKET: {
                     get: async (key: string) => {
-                        if (key !== 'images/test.txt') {
+                        if (key !== 'images/test.png') {
                             return null;
                         }
 
@@ -300,9 +300,9 @@ describe('StorageService', () => {
                             uploaded: new Date('2025-01-01T00:00:00Z'),
                             storageClass: 'Standard',
                             checksums: {} as R2Checksums,
-                            httpMetadata: { contentType: 'text/plain' },
+                            httpMetadata: { contentType: 'image/png' },
                             writeHttpMetadata(headers: Headers) {
-                                headers.set('Content-Type', 'text/plain');
+                                headers.set('Content-Type', 'image/png');
                             },
                             body: new Blob(['test']).stream(),
                             bodyUsed: false,
@@ -322,11 +322,30 @@ describe('StorageService', () => {
             });
 
             const r2App = createAppWithEnv(r2Env, 1);
-            const res = await r2App.request('/blob/images/test.txt', { method: 'GET' }, r2Env);
+            const res = await r2App.request('/blob/images/test.png', { method: 'GET' }, r2Env);
 
             expect(res.status).toBe(200);
-            expect(res.headers.get('content-type')).toBe('text/plain');
+            expect(res.headers.get('content-type')).toBe('image/png');
+            expect(res.headers.get('x-content-type-options')).toBe('nosniff');
             expect(await res.text()).toBe('test');
+        });
+
+        it('should never expose cache or other internal R2 keys', async () => {
+            let storageRead = false;
+            const r2Env = createMockEnv({
+                R2_BUCKET: {
+                    get: async () => {
+                        storageRead = true;
+                        throw new Error('internal key should not be read');
+                    },
+                } as unknown as R2Bucket,
+            });
+            const r2App = createAppWithEnv(r2Env, 1);
+
+            const res = await r2App.request('/blob/cache/cache.json', { method: 'GET' }, r2Env);
+
+            expect(res.status).toBe(404);
+            expect(storageRead).toBe(false);
         });
     });
 });

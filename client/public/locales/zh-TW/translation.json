@@ -166,7 +166,7 @@
   "error": {
     "api_url": "Pages 環境變數中 API_URL 應為 Worker 地址，請檢查 Pages 環境變數中 API_URL 是否正確",
     "api_url_slash": "Pages 環境變數中 API_URL 應為 Worker 地址，請檢查 Pages 環境變數中 API_URL 是否正確，且 API_URL 末尾不能有 /",
-    "github_callback": "GitHub OAuth 回調地址應為 `https://<Worker 地址>/api/user/github/callback`，請檢查 GitHub OAuth 回調地址是否正確",
+    "github_callback": "GitHub OAuth 回調地址應為 `https://<Pages 地址>/api/user/github/callback`，請檢查 GitHub OAuth 回調地址是否正確",
     "not_found": "頁面未找到",
     "permission_denied": "權限不足",
     "title": "錯誤"
@@ -210,6 +210,7 @@
       "network": "網路錯誤，請重試"
     },
     "loading": "登入中...",
+    "creator_only": "僅部落格建立者可透過 GitHub 登入後台",
     "no_methods": "沒有可用的登入方式",
     "oauth_only": "請登入後繼續",
     "or": "或",
@@ -617,31 +618,19 @@
           "suggestion": "如果此實例需要互動式後台存取，請在設定中啟用登入。"
         },
         "missing": {
-          "impact": "使用者可以看到登入入口，但沒有任何可用的登入方式。",
-          "summary": "GitHub OAuth 和密碼登入都未配置。",
-          "suggestion": "請配置 RIN_GITHUB_CLIENT_ID/RIN_GITHUB_CLIENT_SECRET 或 ADMIN_USERNAME/ADMIN_PASSWORD。"
-        },
-        "default_password": {
-          "impact": "管理員帳號仍在使用預設使用者名稱與密碼，屬於嚴重安全風險。",
-          "summary": "ADMIN_USERNAME/ADMIN_PASSWORD 仍然是 admin / admin123。",
-          "suggestion": "在公開網站之前請立即修改預設使用者名稱或密碼。"
-        },
-        "oauth_missing": {
-          "impact": "目前只能使用本地密碼帳號登入，其他使用者無法透過 OAuth 登入並留言。",
-          "summary": "GitHub OAuth 未配置。",
-          "suggestion": "如果希望其他使用者登入，請配置 RIN_GITHUB_CLIENT_ID/RIN_GITHUB_CLIENT_SECRET。"
+          "impact": "GitHub OAuth 配置不完整，建立者無法進入後台。",
+          "summary": "僅限建立者的 GitHub OAuth 尚未完整配置。",
+          "suggestion": "請配置 RIN_GITHUB_CLIENT_ID、RIN_GITHUB_CLIENT_SECRET 和建立者的數字 RIN_GITHUB_ADMIN_ID。"
         },
         "ready": {
           "impact": "後台登入可用。",
-          "summary": "OAuth 登入已配置，且目前密碼登入未使用預設憑證。",
+          "summary": "僅限建立者的 GitHub OAuth 已配置，密碼登入已停用。",
           "suggestion": "無需處理。"
         },
         "details": {
           "github_configured": "GitHub OAuth：已配置",
           "github_missing": "GitHub OAuth：未配置",
-          "password_configured": "密碼登入：已配置",
-          "password_missing": "密碼登入：未配置",
-          "password_default": "密碼登入：使用預設憑證"
+          "password_missing": "密碼登入：已停用"
         }
       },
       "storage": {

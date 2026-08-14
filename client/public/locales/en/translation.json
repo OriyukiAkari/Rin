@@ -166,7 +166,7 @@
   "error": {
     "api_url": "API_URL in Pages environment variables should be the Worker address. Please check if API_URL in Pages environment variables is correct.",
     "api_url_slash": "API_URL in Pages environment variables should be the Worker address. Please check if API_URL in Pages environment variables is correct and ensure API_URL does not end with a slash (/).",
-    "github_callback": "GitHub OAuth callback URL should be `https://<Worker address>/api/user/github/callback`. Please check if the GitHub OAuth callback URL is correct.",
+    "github_callback": "GitHub OAuth callback URL should be `https://<Pages address>/api/user/github/callback`. Please check if the GitHub OAuth callback URL is correct.",
     "not_found": "Page not found",
     "permission_denied": "Permission denied",
     "title": "Error"
@@ -210,6 +210,7 @@
       "network": "Network error, please try again"
     },
     "loading": "Logging in...",
+    "creator_only": "Only the blog creator can access the admin area with GitHub",
     "no_methods": "No login methods available",
     "oauth_only": "Please log in to continue",
     "or": "or",
@@ -617,31 +618,19 @@
           "suggestion": "Enable login in settings if this instance needs interactive admin access."
         },
         "missing": {
-          "impact": "Users can see the login entry but no working login method is configured.",
-          "summary": "Neither GitHub OAuth nor password login is configured.",
-          "suggestion": "Configure RIN_GITHUB_CLIENT_ID/RIN_GITHUB_CLIENT_SECRET or ADMIN_USERNAME/ADMIN_PASSWORD."
-        },
-        "default_password": {
-          "impact": "The admin account is still using the default username and password, which is a critical security risk.",
-          "summary": "ADMIN_USERNAME/ADMIN_PASSWORD are still set to admin / admin123.",
-          "suggestion": "Change the default username or password immediately before exposing the site."
-        },
-        "oauth_missing": {
-          "impact": "Only the local password account can sign in. Other users cannot log in and comment through OAuth.",
-          "summary": "GitHub OAuth is not configured.",
-          "suggestion": "Configure RIN_GITHUB_CLIENT_ID/RIN_GITHUB_CLIENT_SECRET if you expect other users to log in."
+          "impact": "The creator cannot enter the admin UI because GitHub OAuth is incomplete.",
+          "summary": "Creator-only GitHub OAuth is not fully configured.",
+          "suggestion": "Configure RIN_GITHUB_CLIENT_ID, RIN_GITHUB_CLIENT_SECRET, and the creator's numeric RIN_GITHUB_ADMIN_ID."
         },
         "ready": {
           "impact": "Admin sign-in is available.",
-          "summary": "OAuth login is configured and the current password login configuration is not using the default credentials.",
+          "summary": "Creator-only GitHub OAuth is configured and password login is disabled.",
           "suggestion": "No action required."
         },
         "details": {
           "github_configured": "GitHub OAuth: configured",
           "github_missing": "GitHub OAuth: missing",
-          "password_configured": "Password login: configured",
-          "password_missing": "Password login: missing",
-          "password_default": "Password login: using default credentials"
+          "password_missing": "Password login: disabled"
         }
       },
       "storage": {

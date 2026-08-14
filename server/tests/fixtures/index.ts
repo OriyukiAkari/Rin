@@ -32,6 +32,7 @@ export function createMockDB() {
             openid TEXT NOT NULL,
             password TEXT,
             permission INTEGER DEFAULT 0,
+            auth_version INTEGER DEFAULT 0 NOT NULL,
             created_at INTEGER DEFAULT (unixepoch()),
             updated_at INTEGER DEFAULT (unixepoch())
         );
@@ -188,7 +189,8 @@ export function createMockEnv(overrides: Partial<Env> = {}): Env {
         RSS_DESCRIPTION: 'Test Environment',
         RIN_GITHUB_CLIENT_ID: 'test-client-id',
         RIN_GITHUB_CLIENT_SECRET: 'test-client-secret',
-        JWT_SECRET: 'test-jwt-secret',
+        RIN_GITHUB_ADMIN_ID: '456',
+        JWT_SECRET: '0123456789abcdef0123456789abcdef',
         S3_ACCESS_KEY_ID: 'test-access-key',
         S3_SECRET_ACCESS_KEY: 'test-secret-key',
         CACHE_STORAGE_MODE: 'database',

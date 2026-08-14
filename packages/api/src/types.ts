@@ -130,16 +130,6 @@ export interface AuthStatus {
   password: boolean;
 }
 
-export interface LoginRequest {
-  username: string;
-  password: string;
-}
-
-export interface LoginResponse {
-  success: boolean;
-  user: UserProfile;
-}
-
 // ============================================================================
 // Tag Types
 // ============================================================================
@@ -420,7 +410,6 @@ export const API_PATHS = {
 
   // Auth
   AUTH_STATUS: '/api/auth/status',
-  AUTH_LOGIN: '/api/auth/login',
 
   // User
   USER_PROFILE: '/api/user/profile',

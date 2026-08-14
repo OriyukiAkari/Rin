@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import { moments } from "../db/schema";
 import type { AppContext } from "../core/hono-types";
 import { profileAsync } from "../core/server-timing";
+import { parsePagination } from "../utils/pagination";
 import { momentCreateSchema, momentUpdateSchema, validateSchema } from "@rin/api";
 
 export function MomentsService(): Hono {
@@ -15,8 +16,7 @@ export function MomentsService(): Hono {
         const page = c.req.query('page');
         const limit = c.req.query('limit');
         
-        const page_num = (page ? parseInt(page) > 0 ? parseInt(page) : 1 : 1) - 1;
-        const limit_num = limit ? parseInt(limit) > 50 ? 50 : parseInt(limit) : 20;
+        const { pageIndex: page_num, limit: limit_num } = parsePagination(page, limit);
         const cacheKey = `moments_${page_num}_${limit_num}`;
         const cached = await profileAsync(c, 'moments_list_cache_get', () => cache.get(cacheKey));
         
@@ -94,7 +94,7 @@ export function MomentsService(): Hono {
         const cache = c.get('cache');
         const uid = c.get('uid');
         const admin = c.get('admin');
-        const id = c.req.param('id');
+        const id = c.req.param('id') || '';
         
         if (!uid) {
             return c.text('Unauthorized', 401);
@@ -135,7 +135,7 @@ export function MomentsService(): Hono {
         const cache = c.get('cache');
         const uid = c.get('uid');
         const admin = c.get('admin');
-        const id = c.req.param('id');
+        const id = c.req.param('id') || '';
         
         if (!uid) {
             return c.text('Unauthorized', 401);

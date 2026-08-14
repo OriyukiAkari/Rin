@@ -1,6 +1,7 @@
 import { $ } from "bun";
 import { appendFile, mkdir, readdir, unlink } from "node:fs/promises";
 import stripIndent from "strip-indent";
+import { assertCreatorAuthConfig } from "../lib/auth-config";
 import { fixTopField, getMigrationFileVersion, getMigrationVersion, isInfoExist, updateMigrationVersion } from "../lib/db-migration";
 const bunExec = process.execPath;
 const toml = (value: string | undefined) => JSON.stringify(value || "");
@@ -38,8 +39,6 @@ export function buildDefaultR2BucketName(workerName: string) {
 
 const WORKER_SECRET_KEYS = [
   "JWT_SECRET",
-  "ADMIN_USERNAME",
-  "ADMIN_PASSWORD",
   "RIN_GITHUB_CLIENT_ID",
   "RIN_GITHUB_CLIENT_SECRET",
   "RIN_GITHUB_ADMIN_ID",
@@ -105,6 +104,16 @@ export function buildPagesWranglerConfig(pagesName: string, workerName: string) 
     [[services]]
     binding = "RIN_API"
     service = ${toml(workerName)}
+  `);
+}
+
+export function buildWorkerWranglerHeader(workerName: string, serverMain = "server/src/_worker.ts") {
+  return stripIndent(`
+    #:schema node_modules/wrangler/config-schema.json
+    name = ${toml(workerName)}
+    main = ${toml(serverMain)}
+    compatibility_date = "2026-01-20"
+    workers_dev = false
   `);
 }
 
@@ -202,7 +211,11 @@ async function resolveR2BucketInfo(r2BucketName: string) {
 }
 
 export async function runCloudflareDeploy(target: "all" | "server" | "client" = "all", preview = false) {
-  const workerName = requireCloudflareResourceName(renv("WORKER_NAME", "rin-server"), "WORKER_NAME");
+  const productionWorkerName = requireCloudflareResourceName(renv("WORKER_NAME", "rin-server"), "WORKER_NAME");
+  const workerName = requireCloudflareResourceName(
+    preview ? env("PREVIEW_WORKER_NAME", `${productionWorkerName}-preview`)! : productionWorkerName,
+    preview ? "PREVIEW_WORKER_NAME" : "WORKER_NAME",
+  );
   const pagesName = requireCloudflareResourceName(
     renv("PAGES_PROJECT_NAME", env("PAGES_NAME", "rin-client")),
     "PAGES_PROJECT_NAME",
@@ -213,21 +226,27 @@ export async function runCloudflareDeploy(target: "all" | "server" | "client" = 
     return;
   }
 
+  assertCreatorAuthConfig(process.env);
+
   if (target === "all") {
     await buildClient();
   }
 
-  const dbName = requireCloudflareResourceName(renv("DB_NAME", "rin"), "DB_NAME");
+  const productionDbName = requireCloudflareResourceName(renv("DB_NAME", "rin"), "DB_NAME");
+  const dbName = requireCloudflareResourceName(
+    preview ? env("PREVIEW_DB_NAME", `${productionDbName}-preview`)! : productionDbName,
+    preview ? "PREVIEW_DB_NAME" : "DB_NAME",
+  );
   const taskQueueName = requireCloudflareResourceName(
     env("TASK_QUEUE_NAME", env("AI_SUMMARY_QUEUE_NAME", `${workerName}-tasks`)) ?? `${workerName}-tasks`,
     "TASK_QUEUE_NAME",
   );
-  const r2BucketName = requireR2BucketName(
-    renv("R2_BUCKET_NAME", buildDefaultR2BucketName(workerName)),
-  );
+  const r2BucketName = requireR2BucketName(preview
+    ? env("PREVIEW_R2_BUCKET_NAME", buildDefaultR2BucketName(workerName))!
+    : renv("R2_BUCKET_NAME", buildDefaultR2BucketName(workerName)));
   const s3Endpoint = env("S3_ENDPOINT", "");
-  const s3AccessHost = env("S3_ACCESS_HOST", "");
-  const s3Bucket = env("S3_BUCKET", "");
+  const s3AccessHost = preview ? env("PREVIEW_S3_ACCESS_HOST", "") : env("S3_ACCESS_HOST", "");
+  const s3Bucket = preview ? env("PREVIEW_S3_BUCKET", "") : env("S3_BUCKET", "");
   const s3CacheFolder = renv("S3_CACHE_FOLDER", "cache/");
   const s3Folder = renv("S3_FOLDER", "images/");
   const s3Region = renv("S3_REGION", "auto");
@@ -235,7 +254,7 @@ export async function runCloudflareDeploy(target: "all" | "server" | "client" = 
   const webhookUrl = env("WEBHOOK_URL", "");
   const rssTitle = env("RSS_TITLE", "");
   const rssDescription = env("RSS_DESCRIPTION", "");
-  const cacheStorageMode = env("CACHE_STORAGE_MODE", "s3");
+  const cacheStorageMode = env("CACHE_STORAGE_MODE", "database");
   const name = env("NAME", "Rin");
   const description = env("DESCRIPTION", "A lightweight personal blogging system");
   const avatar = env("AVATAR", "");
@@ -262,10 +281,7 @@ export async function runCloudflareDeploy(target: "all" | "server" | "client" = 
   await Bun.write(
     WORKER_CONFIG_PATH,
     stripIndent(`
-      #:schema node_modules/wrangler/config-schema.json
-      name = ${toml(workerName)}
-      main = ${toml(serverMain)}
-      compatibility_date = "2026-01-20"
+      ${buildWorkerWranglerHeader(workerName, serverMain)}
 
       ${buildWranglerTriggersConfig(preview)}
       ${buildWranglerObservabilityConfig(preview)}

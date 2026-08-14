@@ -13,6 +13,15 @@ export const FAVICON_ALLOWED_TYPES: { [key: string]: string } = {
     "image/webp": ".webp",
 };
 
+export function createFaviconTransformRequest(url: string) {
+    return new Request(url, {
+        headers: {
+            Accept: "image/avif,image/webp,image/png,image/jpeg,image/gif",
+            "User-Agent": "Rin-Favicon-Transformer/1.2",
+        },
+    });
+}
+
 export function getFaviconKey(env: Env) {
     return path_join(env.S3_FOLDER || "", "favicon.webp");
 }
@@ -172,9 +181,7 @@ export function FaviconService(): Hono {
             ));
 
             const originFaviconUrl = getStoragePublicUrl(env, originFaviconKey, new URL(c.req.url).origin);
-            const imageRequest = new Request(originFaviconUrl, {
-                headers: c.req.raw.headers,
-            });
+            const imageRequest = createFaviconTransformRequest(originFaviconUrl);
 
             const response = await profileAsync(c, 'favicon_transform_fetch', () => fetch(imageRequest, {
                 cf: {

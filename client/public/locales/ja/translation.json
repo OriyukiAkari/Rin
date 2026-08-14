@@ -166,7 +166,7 @@
   "error": {
     "api_url": "Pages 環境変数のAPI_URLはWorkerアドレスである必要があります。Pages環境変数のAPI_URLが正しいか確認してください。",
     "api_url_slash": "Pages 環境変数のAPI_URLはWorkerアドレスである必要があります。Pages環境変数のAPI_URLが正しいか、またAPI_URLの末尾にスラッシュ（/）がないか確認してください。",
-    "github_callback": "GitHub OAuthコールバックURLは`https://<Workerアドレス>/api/user/github/callback`である必要があります。GitHub OAuthコールバックURLが正しいか確認してください。",
+    "github_callback": "GitHub OAuthコールバックURLは`https://<Pagesアドレス>/api/user/github/callback`である必要があります。GitHub OAuthコールバックURLが正しいか確認してください。",
     "not_found": "ページが見つかりません",
     "permission_denied": "権限がありません",
     "title": "エラー"
@@ -203,6 +203,9 @@
   "listed": "記事にリスト",
   "load_more": "もっと読み込む",
   "login": {
+    "creator_only": "GitHub で管理画面にログインできるのはブログ作成者だけです",
+    "loading": "ログイン中...",
+    "no_methods": "利用できるログイン方法がありません",
     "oauth_only": "続行するにはログインしてください",
     "password": {
       "placeholder": "パスワードを入力してください"
@@ -608,31 +611,19 @@
           "suggestion": "このインスタンスで対話的な管理アクセスが必要なら、設定でログインを有効にしてください。"
         },
         "missing": {
-          "impact": "ログイン入口は表示されますが、利用可能なログイン方法がありません。",
-          "summary": "GitHub OAuth とパスワードログインのどちらも設定されていません。",
-          "suggestion": "RIN_GITHUB_CLIENT_ID/RIN_GITHUB_CLIENT_SECRET または ADMIN_USERNAME/ADMIN_PASSWORD を設定してください。"
-        },
-        "default_password": {
-          "impact": "管理者アカウントがまだ既定のユーザー名とパスワードを使っており、重大なセキュリティリスクです。",
-          "summary": "ADMIN_USERNAME/ADMIN_PASSWORD が admin / admin123 のままです。",
-          "suggestion": "サイトを公開する前に既定のユーザー名またはパスワードを直ちに変更してください。"
-        },
-        "oauth_missing": {
-          "impact": "現在はローカルのパスワードアカウントしか使えず、他のユーザーは OAuth でログインしてコメントできません。",
-          "summary": "GitHub OAuth が設定されていません。",
-          "suggestion": "他のユーザーにもログインを許可するなら、RIN_GITHUB_CLIENT_ID/RIN_GITHUB_CLIENT_SECRET を設定してください。"
+          "impact": "GitHub OAuth の設定が不完全なため、作成者は管理画面に入れません。",
+          "summary": "作成者専用 GitHub OAuth が完全に設定されていません。",
+          "suggestion": "RIN_GITHUB_CLIENT_ID、RIN_GITHUB_CLIENT_SECRET、および作成者の数値 RIN_GITHUB_ADMIN_ID を設定してください。"
         },
         "ready": {
           "impact": "管理ログインが利用可能です。",
-          "summary": "OAuth ログインが設定済みで、現在のパスワードログインも既定の認証情報を使っていません。",
+          "summary": "作成者専用 GitHub OAuth が設定され、パスワードログインは無効です。",
           "suggestion": "対応は不要です。"
         },
         "details": {
           "github_configured": "GitHub OAuth: 設定済み",
           "github_missing": "GitHub OAuth: 未設定",
-          "password_configured": "パスワードログイン: 設定済み",
-          "password_missing": "パスワードログイン: 未設定",
-          "password_default": "パスワードログイン: 既定の認証情報を使用中"
+          "password_missing": "パスワードログイン: 無効"
         }
       },
       "storage": {

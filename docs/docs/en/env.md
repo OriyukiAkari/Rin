@@ -60,18 +60,17 @@ We recommend setting `CACHE_STORAGE_MODE` to `database` to reduce deployment com
 
 These sensitive values must be configured as **Cloudflare Workers Secrets**, entered via CLI during deployment or set in advance.
 
-### Authentication (Configure at least one)
+### Authentication (Creator-only GitHub OAuth)
 
 | Variable | Purpose | How to Obtain |
 |----------|---------|---------------|
 | `RIN_GITHUB_CLIENT_ID` | GitHub OAuth client ID | GitHub OAuth App settings |
 | `RIN_GITHUB_CLIENT_SECRET` | GitHub OAuth client secret | GitHub OAuth App settings |
-| `ADMIN_USERNAME` | Username for password login | Set yourself |
-| `ADMIN_PASSWORD` | Password for password login | Set yourself |
-| `JWT_SECRET` | JWT signing key (any random string) | Generate yourself |
+| `RIN_GITHUB_ADMIN_ID` | Creator's numeric GitHub user ID | GitHub profile API |
+| `JWT_SECRET` | JWT signing key (at least 32 bytes) | `openssl rand -hex 32` |
 
 :::warning Authentication Required
-You must configure either **GitHub OAuth** or **Username/Password** authentication, otherwise you cannot access the admin panel.
+Password login is disabled. All three GitHub values are required, and OAuth callbacks from any GitHub account other than `RIN_GITHUB_ADMIN_ID` are rejected before a local user or session is created.
 :::
 
 ### S3 Storage Credentials
@@ -118,11 +117,10 @@ S3_ACCESS_HOST                # S3/R2 access domain
 S3_BUCKET                     # S3 bucket name
 S3_ACCESS_KEY_ID              # S3 access key ID
 S3_SECRET_ACCESS_KEY          # S3 secret access key
-RIN_GITHUB_CLIENT_ID          # GitHub OAuth ID (optional)
-RIN_GITHUB_CLIENT_SECRET      # GitHub OAuth Secret (optional)
-ADMIN_USERNAME                # Admin username (optional)
-ADMIN_PASSWORD                # Admin password (optional)
-JWT_SECRET                    # JWT secret key
+RIN_GITHUB_CLIENT_ID          # GitHub OAuth ID
+RIN_GITHUB_CLIENT_SECRET      # GitHub OAuth Secret
+RIN_GITHUB_ADMIN_ID           # Creator's numeric GitHub user ID
+JWT_SECRET                    # JWT secret key, at least 32 bytes
 ```
 
 ---
@@ -142,14 +140,12 @@ S3_BUCKET=my-bucket
 S3_ACCESS_KEY_ID=xxx
 S3_SECRET_ACCESS_KEY=xxx
 
-# Authentication (GitHub or Username/Password)
+# Authentication (creator-only GitHub OAuth)
 RIN_GITHUB_CLIENT_ID=xxx
 RIN_GITHUB_CLIENT_SECRET=xxx
-# OR
-ADMIN_USERNAME=admin
-ADMIN_PASSWORD=secure_password
+RIN_GITHUB_ADMIN_ID=12345678
 
 # Others
-JWT_SECRET=random_secret_key
+JWT_SECRET=a_random_value_with_at_least_32_bytes
 CACHE_STORAGE_MODE=database
 ```

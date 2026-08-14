@@ -17,12 +17,20 @@ import {
 export function UserService(): Hono {
     const app = new Hono();
 
+    const getCreatorGitHubId = (env: Env) => {
+        const id = env.RIN_GITHUB_ADMIN_ID?.trim();
+        return id && /^[1-9][0-9]*$/.test(id) ? id : null;
+    };
+
     // GET /user/github - Redirect to GitHub OAuth
     app.get("/github", async (c: AppContext) => {
         const oauth2 = c.get('oauth2');
 
         if (!oauth2) {
             throw new BadRequestError('GitHub OAuth is not configured');
+        }
+        if (!getCreatorGitHubId(c.env)) {
+            throw new BadRequestError('Creator GitHub ID is not configured');
         }
 
         const requestUrl = new URL(c.req.url);
@@ -55,6 +63,10 @@ export function UserService(): Hono {
 
         if (!oauth2) {
             throw new BadRequestError('GitHub OAuth is not configured');
+        }
+        const creatorGitHubId = getCreatorGitHubId(c.env);
+        if (!creatorGitHubId) {
+            throw new BadRequestError('Creator GitHub ID is not configured');
         }
 
         const query = c.req.query();
@@ -91,6 +103,11 @@ export function UserService(): Hono {
         if (!user?.id || !(user.name || user.login) || !user.avatar_url) {
             throw new BadRequestError('Invalid GitHub profile');
         }
+        if (String(user.id) !== creatorGitHubId) {
+            clearJWTCookie(c);
+            deleteCookie(c, 'redirect_to', { path: '/' });
+            throw new ForbiddenError('GitHub account is not authorized');
+        }
         const profile: {
             openid: string;
             username: string;
@@ -100,10 +117,8 @@ export function UserService(): Hono {
             openid: String(user.id),
             username: user.name || user.login,
             avatar: user.avatar_url,
-            permission: 0
+            permission: 1
         };
-
-        let authToken: string | undefined;
 
         // Check if user exists
         const existingUser = await profileAsync(c, 'user_existing_lookup', () => db.query.users.findFirst({
@@ -111,29 +126,35 @@ export function UserService(): Hono {
         }));
 
         if (existingUser) {
-            profile.permission = existingUser.permission;
+            const nextAuthVersion = existingUser.authVersion + 1;
             await profileAsync(c, 'user_existing_update', () => db.update(users).set({
                 avatar: profile.avatar,
                 openid: profile.openid,
-                permission: profile.permission,
+                permission: 1,
+                authVersion: nextAuthVersion,
             }).where(eq(users.id, existingUser.id)));
-            authToken = await profileAsync(c, 'user_existing_token', () => jwt.sign({ id: existingUser.id }));
+            const authToken = await profileAsync(c, 'user_existing_token', () => jwt.sign({
+                id: existingUser.id,
+                v: nextAuthVersion,
+            }));
             setJWTCookie(c, authToken);
         } else {
-            if (c.env.RIN_GITHUB_ADMIN_ID && profile.openid === c.env.RIN_GITHUB_ADMIN_ID) {
-                profile.permission = 1;
-            }
-
             const usernameExists = await db.query.users.findFirst({ where: eq(users.username, profile.username) });
             if (usernameExists) {
                 profile.username = `${profile.username.slice(0, 60)}-${profile.openid}`;
             }
-            const result = await profileAsync(c, 'user_insert', () => db.insert(users).values(profile).returning({ insertedId: users.id }));
+            const result = await profileAsync(c, 'user_insert', () => db.insert(users).values({
+                ...profile,
+                authVersion: 1,
+            }).returning({ insertedId: users.id }));
             if (!result || result.length === 0) {
                 throw new InternalServerError('Failed to register user');
             }
 
-            authToken = await profileAsync(c, 'user_insert_token', () => jwt.sign({ id: result[0].insertedId }));
+            const authToken = await profileAsync(c, 'user_insert_token', () => jwt.sign({
+                id: result[0].insertedId,
+                v: 1,
+            }));
             setJWTCookie(c, authToken);
         }
 
@@ -173,6 +194,16 @@ export function UserService(): Hono {
 
     // POST /user/logout - Logout user
     app.post('/logout', async (c: AppContext) => {
+        const uid = c.get('uid');
+        if (uid) {
+            const db = c.get('db');
+            const current = await db.query.users.findFirst({ where: eq(users.id, uid) });
+            if (current) {
+                await db.update(users)
+                    .set({ authVersion: current.authVersion + 1 })
+                    .where(eq(users.id, uid));
+            }
+        }
         clearJWTCookie(c);
         deleteCookie(c, 'auth_token', {
             path: '/',

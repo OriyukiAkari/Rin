@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { eq } from 'drizzle-orm';
-import { FaviconService, FAVICON_ALLOWED_TYPES, getFaviconKey } from '../favicon';
+import { createFaviconTransformRequest, FaviconService, FAVICON_ALLOWED_TYPES, getFaviconKey } from '../favicon';
 import { Hono } from "hono";
 import { createMiddleware } from "hono/factory";
 import type { Variables, JWTUtils, CacheImpl } from "../../core/hono-types";
@@ -357,6 +357,17 @@ describe('FaviconService', () => {
             });
             const key = getFaviconKey(env);
             expect(key).toBe('favicon.webp');
+        });
+    });
+
+    describe('createFaviconTransformRequest', () => {
+        it('does not forward administrator credentials to the image host', () => {
+            const request = createFaviconTransformRequest('https://cdn.example.com/images/favicon.png');
+
+            expect(request.headers.get('authorization')).toBeNull();
+            expect(request.headers.get('cookie')).toBeNull();
+            expect(request.headers.get('content-type')).toBeNull();
+            expect(request.headers.get('accept')).toContain('image/webp');
         });
     });
 });

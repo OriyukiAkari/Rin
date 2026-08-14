@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import {
   buildWranglerObservabilityConfig,
+  buildWorkerWranglerHeader,
   buildPagesWranglerConfig,
   buildDefaultR2BucketName,
   buildWranglerQueueConfig,
@@ -8,6 +9,15 @@ import {
   collectWorkerSecrets,
   includesPagesProject,
 } from "./deploy-cf";
+
+describe("buildWorkerWranglerHeader", () => {
+  it("disables the public workers.dev entrypoint", () => {
+    const config = buildWorkerWranglerHeader("rin-server");
+    expect(config).toContain('name = "rin-server"');
+    expect(config).toContain('main = "server/src/_worker.ts"');
+    expect(config).toContain("workers_dev = false");
+  });
+});
 
 describe("buildPagesWranglerConfig", () => {
   it("binds Pages Functions to the backend Worker", () => {
@@ -42,6 +52,7 @@ describe("collectWorkerSecrets", () => {
       ADMIN_PASSWORD: "password",
       RIN_GITHUB_CLIENT_ID: "client-id",
       RIN_GITHUB_CLIENT_SECRET: "client-secret",
+      RIN_GITHUB_ADMIN_ID: "456",
       S3_ACCESS_KEY_ID: "access-key",
       S3_SECRET_ACCESS_KEY: "secret-key",
       UNUSED: "ignored",
@@ -49,10 +60,9 @@ describe("collectWorkerSecrets", () => {
 
     expect(secrets).toEqual({
       JWT_SECRET: "jwt-secret",
-      ADMIN_USERNAME: "admin",
-      ADMIN_PASSWORD: "password",
       RIN_GITHUB_CLIENT_ID: "client-id",
       RIN_GITHUB_CLIENT_SECRET: "client-secret",
+      RIN_GITHUB_ADMIN_ID: "456",
       S3_ACCESS_KEY_ID: "access-key",
       S3_SECRET_ACCESS_KEY: "secret-key",
     });
@@ -61,13 +71,10 @@ describe("collectWorkerSecrets", () => {
   it("omits empty secret values", () => {
     const secrets = collectWorkerSecrets({
       JWT_SECRET: "",
-      ADMIN_USERNAME: undefined,
       ADMIN_PASSWORD: "password",
     });
 
-    expect(secrets).toEqual({
-      ADMIN_PASSWORD: "password",
-    });
+    expect(secrets).toEqual({});
   });
 });
 

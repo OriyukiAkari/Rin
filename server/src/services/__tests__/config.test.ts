@@ -147,9 +147,9 @@ describe("ConfigService", () => {
             expect(typeof data.summary.success).toBe("number");
         });
 
-        it("should mark default password login as danger", async () => {
-            env.ADMIN_USERNAME = "admin" as any;
-            env.ADMIN_PASSWORD = "admin123" as any;
+        it("should ignore legacy password variables and report creator OAuth as ready", async () => {
+            (env as any).ADMIN_USERNAME = "admin";
+            (env as any).ADMIN_PASSWORD = "admin123";
             const res = await app.request("/health", {
                 method: "GET",
                 headers: {
@@ -164,8 +164,8 @@ describe("ConfigService", () => {
             expect(
                 data.items.some((item) =>
                     item.id === "login-methods" &&
-                    item.status === "danger" &&
-                    item.summary.key === "health.items.login_methods.default_password.summary",
+                    item.status === "success" &&
+                    item.summary.key === "health.items.login_methods.ready.summary",
                 ),
             ).toBe(true);
         });

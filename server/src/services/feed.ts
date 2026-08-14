@@ -6,6 +6,7 @@ import { feeds, visitStats } from "../db/schema";
 import { HyperLogLog } from "../utils/hyperloglog";
 import { extractImageWithMetadata } from "../utils/image";
 import { stripMarkdown } from "../utils/markdown";
+import { parsePagination } from "../utils/pagination";
 import { syncFeedAISummaryQueueState } from "./feed-ai-summary";
 import { normalizeFeedAlias, normalizeTags, parseFeedId, parseRequestedDate } from "./feed-input";
 import { bindTagToPost } from "./tag";
@@ -34,8 +35,7 @@ export function FeedService(): Hono<{
             return c.text('Permission denied', 403);
         }
 
-        const page_num = (page ? parseInt(page) > 0 ? parseInt(page) : 1 : 1) - 1;
-        const limit_num = limit ? parseInt(limit) > 50 ? 50 : parseInt(limit) : 20;
+        const { pageIndex: page_num, limit: limit_num } = parsePagination(page, limit);
         const cacheKey = `feeds_${type}_${page_num}_${limit_num}`;
         const cached = await profileAsync(c, 'feed_list_cache_get', () => cache.get(cacheKey));
 
@@ -105,6 +105,7 @@ export function FeedService(): Hono<{
             where: where,
             columns: { id: true, title: true, createdAt: true },
             orderBy: [desc(feeds.createdAt), desc(feeds.updatedAt)],
+            limit: 1000,
         })));
     });
 
@@ -209,8 +210,8 @@ export function FeedService(): Hono<{
         const cacheKey = id_num === null ? `feed_alias_${id}` : `feed_id_${id_num}`;
         const where = id_num === null ? eq(feeds.alias, id) : eq(feeds.id, id_num);
 
-        const feed = await profileAsync(c, 'feed_detail_cache_db', () => cache.getOrSet(cacheKey, () => db.query.feeds.findFirst({
-            where,
+        const loadFeed = (includeDrafts: boolean) => db.query.feeds.findFirst({
+            where: includeDrafts ? where : and(where, eq(feeds.draft, 0)),
             with: {
                 hashtags: {
                     columns: {},
@@ -220,14 +221,15 @@ export function FeedService(): Hono<{
                 },
                 user: { columns: { id: true, username: true, avatar: true } }
             }
-        })));
+        });
+        const feed = await profileAsync(c, 'feed_detail_cache_db', () =>
+            admin && uid
+                ? loadFeed(true)
+                : cache.getOrSet(cacheKey, () => loadFeed(false)),
+        );
 
         if (!feed) {
             return c.text('Not found', 404);
-        }
-
-        if (feed.draft && feed.uid !== uid && !admin) {
-            return c.text('Permission denied', 403);
         }
 
         const { hashtags, ...other } = feed;

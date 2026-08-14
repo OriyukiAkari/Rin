@@ -23,6 +23,47 @@ which automatically generates release notes from commit messages.
 
 ### Security
 
+## [v1.2.0] - 2026-08-14
+
+### Added
+
+- Added creator-only GitHub OAuth validation, JWT session versions, bounded pagination, and
+  focused security tests for authentication, storage, cache visibility, and deployment config.
+- Added migration `0012` to clear legacy password hashes and support immediate session revocation.
+
+### Changed
+
+- Production deployment now checks out trusted source from the default branch, runs validation,
+  and deploys directly instead of consuming a pull-request-controlled artifact.
+- Database cache is the default; R2 public blob delivery is restricted to normalized image keys.
+- Preview resources use isolated Worker, D1, R2, and external-storage configuration.
+- Local Vite binds to loopback by default, and remote Workers AI use is explicit opt-in.
+- Updated Wrangler to the current Cloudflare 4.x toolchain and removed an unused client dependency.
+
+### Removed
+
+- Removed password login from the client and API contract. The legacy endpoint now always returns
+  `403`, and legacy password environment variables are no longer deployed.
+
+### Fixed
+
+- Fixed draft cache leakage, unsafe favicon header forwarding, unbounded list queries, unknown
+  configuration writes, placeholder JWT secrets, and direct public Worker exposure.
+
+### Security
+
+- Only the numeric GitHub account configured by `RIN_GITHUB_ADMIN_ID` may create a session or enter
+  the admin area; every other GitHub identity is rejected before local user creation.
+- JWTs are pinned to HS256 with issuer/audience checks, 24-hour expiry, random IDs, and revocable
+  per-user session versions.
+- CI pull requests build and test only. Production deploys are restricted to successful default-
+  branch pushes or manually selected commits that are ancestors of the default branch.
+
+### Upgrade notes
+
+- Apply `server/sql/0012.sql`, configure all three GitHub OAuth values, and rotate to a random
+  `JWT_SECRET` of at least 32 bytes. See `docs/v1.2-security.md`.
+
 ## [v1.1.0] - 2026-08-14
 
 ### Added

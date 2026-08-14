@@ -71,6 +71,7 @@ export const users = sqliteTable("users", {
     avatar: text("avatar"),
     password: text("password"),
     permission: integer("permission").default(0),
+    authVersion: integer("auth_version").default(0).notNull(),
     createdAt: created_at,
     updatedAt: updated_at,
 }, (table) => ({

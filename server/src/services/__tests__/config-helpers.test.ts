@@ -132,4 +132,14 @@ describe("persistRegularConfig", () => {
             "ai_summary.provider": "openai",
         }, "client")).rejects.toThrow("does not belong to the client scope");
     });
+
+    it("rejects unregistered config keys", async () => {
+        await expect(persistRegularConfig({
+            async all() { return new Map(); },
+            async set() {},
+            async save() {},
+        }, {
+            "plugin.untrusted": "value",
+        }, "server")).rejects.toThrow("Unknown config key plugin.untrusted");
+    });
 });

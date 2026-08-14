@@ -30,7 +30,7 @@ export function TagService(): Hono {
     app.get('/:name', async (c: AppContext) => {
         const db = c.get('db');
         const admin = c.get('admin');
-        const nameDecoded = decodeURI(c.req.param('name'));
+        const nameDecoded = decodeURI(c.req.param('name') || '');
         
         const tag = await profileAsync(c, 'tag_detail_db', () => db.query.hashtags.findFirst({
             where: eq(hashtags.name, nameDecoded),

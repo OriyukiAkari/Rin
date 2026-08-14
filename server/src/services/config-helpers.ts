@@ -176,8 +176,7 @@ export async function persistRegularConfig(
       }
       await config.set(key, normalizeConfigValue(key, updates[key]), false);
     } else {
-      // Keep unregistered legacy/plugin keys round-trippable during upgrades.
-      await config.set(key, updates[key], false);
+      throw new Error(`Unknown config key ${key}`);
     }
   }
   await config.save();

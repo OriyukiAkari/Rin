@@ -1,7 +1,7 @@
 {
   "name": "rin",
-  "version": "1.1.0",
-  "packageManager": "bun@1.3.13",
+  "version": "1.2.0",
+  "packageManager": "bun@1.3.14",
   "workspaces": [
     "packages/*",
     "cli",
@@ -9,6 +9,23 @@
     "client"
   ],
   "private": true,
+  "overrides": {
+    "@babel/runtime": "7.26.10",
+    "cross-spawn": "7.0.6",
+    "lodash-es": "4.18.1",
+    "mdast-util-to-hast": "13.2.1",
+    "fast-xml-parser": "5.7.0",
+    "flatted": "3.4.2",
+    "form-data": "4.0.6",
+    "js-yaml": "4.3.1",
+    "micromatch": "4.0.8",
+    "postcss": "8.5.26",
+    "prismjs": "1.30.0",
+    "rollup": "4.59.0",
+    "undici": "7.29.0",
+    "vite": "6.4.3",
+    "ws": "8.21.0"
+  },
   "scripts": {
     "dev": "bun cli/bin/rin.ts dev",
     "dev:setup": "bun cli/bin/rin.ts setup-dev",
@@ -37,6 +54,6 @@
     "release": "bun cli/bin/rin.ts release"
   },
   "devDependencies": {
-    "wrangler": "4.71.0"
+    "wrangler": "4.123.0"
   }
 }

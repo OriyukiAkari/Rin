@@ -236,34 +236,8 @@ describe('API Client', () => {
   })
 
   describe('Authentication', () => {
-    it('should login with credentials', async () => {
-      const mockResponse = {
-        success: true,
-        token: 'auth_token_123',
-        user: { id: 1, username: 'testuser' },
-      }
-      const loginData = { username: 'test', password: 'pass' }
-
-      mockFetch.mockResolvedValueOnce(createMockResponse({
-        ok: true,
-        headers: new Map([['content-type', 'application/json']]),
-        json: async () => mockResponse,
-      }))
-
-      const result = await api.auth.login(loginData)
-
-      expect(result.data).toEqual(mockResponse)
-      expect(mockFetch).toHaveBeenCalledWith(
-        'http://localhost/api/auth/login',
-        expect.objectContaining({
-          method: 'POST',
-          body: JSON.stringify(loginData),
-        })
-      )
-    })
-
     it('should check auth status', async () => {
-      const mockResponse = { github: true, password: true }
+      const mockResponse = { github: true, password: false }
 
       mockFetch.mockResolvedValueOnce(createMockResponse({
         ok: true,

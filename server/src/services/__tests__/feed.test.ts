@@ -166,6 +166,35 @@ describe('FeedService', () => {
             expect(data.title).toBe('Test Feed');
         });
 
+        it('should never place a draft viewed by the creator into the public cache', async () => {
+            await clientConfig.set('cache.enabled', true);
+            const createRes = await app.request('/', {
+                method: 'POST',
+                headers: {
+                    'Authorization': 'Bearer mock_token_1',
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    title: 'Private Draft',
+                    content: 'draft-secret',
+                    listed: true,
+                    draft: true,
+                    tags: [],
+                }),
+            }, env);
+            const { insertedId } = await createRes.json() as { insertedId: number };
+
+            const creatorRes = await app.request(`/${insertedId}`, {
+                headers: { 'Authorization': 'Bearer mock_token_1' },
+            }, env);
+            expect(creatorRes.status).toBe(200);
+            expect(await cache.get(`feed_id_${insertedId}`)).toBeNull();
+
+            const publicRes = await app.request(`/${insertedId}`, { method: 'GET' }, env);
+            expect(publicRes.status).toBe(404);
+            expect(await cache.get(`feed_id_${insertedId}`)).toBeNull();
+        });
+
         it('should prefer a numeric feed id over another feed numeric alias', async () => {
             const firstRes = await app.request('/', {
                 method: 'POST',

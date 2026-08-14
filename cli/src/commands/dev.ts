@@ -23,8 +23,8 @@ function registerSignalHandlers(processes: Subprocess[]) {
   return () => stopping;
 }
 
-function createViteArgs(port: number) {
-  return [bunExec, "x", "vite", "--host", "0.0.0.0", "--port", String(port), "--strictPort"];
+export function createViteArgs(port: number, host = "127.0.0.1") {
+  return [bunExec, "x", "vite", "--host", host, "--port", String(port), "--strictPort"];
 }
 
 function createWranglerArgs(port: number) {
@@ -46,11 +46,13 @@ export async function runDevCommand(args: string[]) {
       port: { type: "string", short: "p", default: "11498" },
       client: { type: "boolean", default: false },
       server: { type: "boolean", default: false },
+      host: { type: "string", default: "127.0.0.1" },
     },
     strict: false,
   });
 
   const port = parseInt((values.port as string) || "11498");
+  const host = (values.host as string) || "127.0.0.1";
   if (!(await checkPort(port))) {
     throw new Error(`Port ${port} is already in use`);
   }
@@ -69,7 +71,7 @@ export async function runDevCommand(args: string[]) {
   }
 
   if (values.client) {
-    const proc = Bun.spawn(createViteArgs(port), {
+    const proc = Bun.spawn(createViteArgs(port, host), {
       stdout: "inherit",
       stderr: "inherit",
       cwd: "client",
@@ -101,14 +103,14 @@ export async function runDevCommand(args: string[]) {
   });
 
   logger.info(`Starting Vite dev server with HMR on port ${port}...`);
-  const clientProc = Bun.spawn(createViteArgs(port), {
+  const clientProc = Bun.spawn(createViteArgs(port, host), {
     stdout: "inherit",
     stderr: "inherit",
     cwd: "client",
     env: createViteEnv(workerPort),
   });
 
-  logger.success(`Development entry is http://localhost:${port} (API proxied to ${workerPort})`);
+  logger.success(`Development entry is http://${host}:${port} (API proxied to ${workerPort})`);
   const isStopping = registerSignalHandlers([workerProc, clientProc]);
 
   const exitCode = await Promise.race([workerProc.exited, clientProc.exited]);

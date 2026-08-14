@@ -73,10 +73,17 @@ export const authMiddleware = createMiddleware<{
                     where: eq(users.id, profile.id)
                 }));
 
-                if (user) {
+                const creatorGitHubId = c.env.RIN_GITHUB_ADMIN_ID?.trim();
+                if (
+                    user &&
+                    creatorGitHubId &&
+                    user.openid === creatorGitHubId &&
+                    user.permission === 1 &&
+                    profile.v === user.authVersion
+                ) {
                     c.set('uid', user.id);
                     c.set('username', user.username);
-                    c.set('admin', user.permission === 1);
+                    c.set('admin', true);
                 }
             }
         }

@@ -125,7 +125,7 @@ export function FriendService(): Hono {
         const env = c.get('env');
         const clientConfig = c.get('clientConfig');
         const serverConfig = c.get('serverConfig');
-        const id = c.req.param('id');
+        const id = c.req.param('id') || '';
 
         if (!uid) {
             return c.text('Unauthorized', 401);
@@ -224,7 +224,7 @@ export function FriendService(): Hono {
         const admin = c.get('admin');
         const uid = c.get('uid');
         const db = c.get('db');
-        const id = c.req.param('id');
+        const id = c.req.param('id') || '';
         
         if (!uid) {
             return c.text('Unauthorized', 401);

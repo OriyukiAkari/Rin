@@ -38,40 +38,30 @@ GITHUB_CLIENT_SECRET  → RIN_GITHUB_CLIENT_SECRET
 2. Add new Secrets with the `RIN_` prefix
 3. (Optional) Delete old Secrets
 
-#### Optional: Add Username/Password Login
+#### v1.2 authentication requirement
 
-If you prefer simple username/password authentication over GitHub OAuth:
+Password authentication has been removed. Configure `RIN_GITHUB_CLIENT_ID`,
+`RIN_GITHUB_CLIENT_SECRET`, and the creator's numeric `RIN_GITHUB_ADMIN_ID`.
 
-1. Add the following Secrets:
-    - `ADMIN_USERNAME`: Your desired username
-    - `ADMIN_PASSWORD`: Your desired password
+### Step 3: Keep Pages as the public entry
 
-### Step 3: Remove Pages (Optional but Recommended)
+The v1.1+ architecture hosts the frontend on Cloudflare Pages and forwards `/api/*`
+to the private Worker through a Service Binding. Do not remove the Pages project.
 
-Starting from 0.3.0, Rin now uses Workers to host static assets instead of Cloudflare Pages. Follow these steps to migrate:
+1. **Keep the custom domain on Pages**
+   - Go to Cloudflare Dashboard → Pages → your Rin project → Custom domains
+   - Confirm the blog domain remains bound to Pages
 
-1. **Unbind Pages Domain**
-   - Go to Cloudflare Dashboard → Pages
-   - Select your Pages project → Custom domains
-   - Remove the bound domain
+2. **Remove direct Worker routes**
+   - Remove legacy Worker custom domains and routes; v1.2 also sets `workers_dev = false`
 
-2. **Bind Domain to Worker**
-   - Go to Cloudflare Dashboard → Workers & Pages
-   - Select your Worker (`rin-server`)
-   - Click "Triggers" → "Add Custom Domain"
-   - Enter your domain and save
-
-3. **Clean Up Extra Domain Bindings**
-   - Check the Worker's custom domain list
-   - Remove unnecessary bindings (e.g., `seo/*`, `sub/*`, etc.)
-
-4. **Update GitHub OAuth Callback**
+3. **Update GitHub OAuth Callback**
    - Go to GitHub → Settings → Developer settings → OAuth Apps
    - Find your OAuth App
    - Change the Authorization callback URL from:
      - `https://<worker-domain>/user/github/callback`
    - To:
-     - `https://<your-domain>/api/user/github/callback`
+     - `https://<pages-or-blog-domain>/api/user/github/callback`
 
 ### Step 4: Update Cloudflare API Key Permissions
 
@@ -125,12 +115,11 @@ If you have custom frontend code using the old API, please update accordingly.
 
 | Old Name | New Name | Required |
 |----------|----------|----------|
-| `GITHUB_CLIENT_ID` | `RIN_GITHUB_CLIENT_ID` | Optional* |
-| `GITHUB_CLIENT_SECRET` | `RIN_GITHUB_CLIENT_SECRET` | Optional* |
-| - | `ADMIN_USERNAME` | Optional* |
-| - | `ADMIN_PASSWORD` | Optional* |
+| `GITHUB_CLIENT_ID` | `RIN_GITHUB_CLIENT_ID` | Required |
+| `GITHUB_CLIENT_SECRET` | `RIN_GITHUB_CLIENT_SECRET` | Required |
+| - | `RIN_GITHUB_ADMIN_ID` | Required |
 
-*At least one login method must be configured
+All three GitHub values are required. Only the configured creator can log in.
 
 ## Post-Migration
 

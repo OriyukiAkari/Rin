@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { validateCreatorAuthConfig } from "../lib/auth-config";
 import { parseEnv } from "../lib/env";
 
 const toml = (value: string | undefined) => JSON.stringify(value || "");
@@ -21,7 +22,6 @@ export async function runSetupDev() {
   const baseRequiredVars = [
     "NAME",
     "AVATAR",
-    "JWT_SECRET",
   ];
   const storageRequiredVars = env.R2_BUCKET_NAME
     ? []
@@ -36,24 +36,10 @@ export async function runSetupDev() {
     process.exit(1);
   }
 
-  const githubAuthConfigured = Boolean(
-    env.RIN_GITHUB_CLIENT_ID && env.RIN_GITHUB_CLIENT_SECRET,
-  );
-  const passwordAuthConfigured = Boolean(
-    env.ADMIN_USERNAME && env.ADMIN_PASSWORD,
-  );
-  const githubAdminConfigured = Boolean(env.RIN_GITHUB_ADMIN_ID);
-
-  if (!githubAuthConfigured && !passwordAuthConfigured) {
-    console.error("❌ 错误：至少需要配置一种登录方式：");
-    console.error("   - RIN_GITHUB_CLIENT_ID + RIN_GITHUB_CLIENT_SECRET");
-    console.error("   - ADMIN_USERNAME + ADMIN_PASSWORD");
-    console.log("\n请编辑 .env.local 文件并添加其中一组配置\n");
-    process.exit(1);
-  }
-
-  if (githubAuthConfigured && !passwordAuthConfigured && !githubAdminConfigured) {
-    console.error("❌ 错误：仅使用 GitHub OAuth 时必须设置 RIN_GITHUB_ADMIN_ID");
+  const authErrors = validateCreatorAuthConfig(env);
+  if (authErrors.length > 0) {
+    console.error("❌ 错误：创建者 GitHub OAuth 配置无效：");
+    authErrors.forEach((message) => console.error(`   - ${message}`));
     process.exit(1);
   }
 
@@ -76,13 +62,10 @@ S3_FORCE_PATH_STYLE = ${toml(env.S3_FORCE_PATH_STYLE || "false")}
 WEBHOOK_URL = ${toml(env.WEBHOOK_URL)}
 RSS_TITLE = ${toml(env.RSS_TITLE || "Rin Development")}
 RSS_DESCRIPTION = ${toml(env.RSS_DESCRIPTION || "Development Environment")}
-CACHE_STORAGE_MODE = ${toml(env.CACHE_STORAGE_MODE || "s3")}
+CACHE_STORAGE_MODE = ${toml(env.CACHE_STORAGE_MODE || "database")}
 SITE_URL = ${toml(env.SITE_URL)}
 CORS_ALLOWED_ORIGINS = ${toml(env.CORS_ALLOWED_ORIGINS)}
 VISIT_RETENTION_DAYS = ${toml(env.VISIT_RETENTION_DAYS || "30")}
-
-[ai]
-binding = "AI"
 
 [[d1_databases]]
 binding = "DB"
@@ -97,6 +80,13 @@ queue = ${toml(env.TASK_QUEUE_NAME || env.AI_SUMMARY_QUEUE_NAME || `${env.WORKER
 queue = ${toml(env.TASK_QUEUE_NAME || env.AI_SUMMARY_QUEUE_NAME || `${env.WORKER_NAME || "rin-server"}-tasks`)}
 max_batch_size = 1
 max_batch_timeout = 5
+${env.WORKERS_AI_REMOTE === "true"
+  ? `
+
+[ai]
+binding = "AI"
+remote = true`
+  : ""}
 ${env.R2_BUCKET_NAME
   ? `
 
@@ -123,8 +113,6 @@ RSS_ENABLE=${env.RSS_ENABLE || "false"}
 RIN_GITHUB_CLIENT_SECRET=${env.RIN_GITHUB_CLIENT_SECRET}
 RIN_GITHUB_ADMIN_ID=${env.RIN_GITHUB_ADMIN_ID || ""}
 JWT_SECRET=${env.JWT_SECRET}
-ADMIN_USERNAME=${env.ADMIN_USERNAME || ""}
-ADMIN_PASSWORD=${env.ADMIN_PASSWORD || ""}
 S3_ACCESS_KEY_ID=${env.S3_ACCESS_KEY_ID || ""}
 S3_SECRET_ACCESS_KEY=${env.S3_SECRET_ACCESS_KEY || ""}
 `,

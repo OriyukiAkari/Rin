@@ -10,6 +10,34 @@ const ALLOWED_UPLOAD_TYPES = new Map([
     ["image/gif", "gif"],
     ["image/webp", "webp"],
 ]);
+const ALLOWED_PUBLIC_TYPES = new Set([
+    ...ALLOWED_UPLOAD_TYPES.keys(),
+    "image/x-icon",
+    "image/vnd.microsoft.icon",
+]);
+
+export function resolvePublicStorageKey(env: Env, rawKey: string) {
+    let key: string;
+    try {
+        key = decodeURIComponent(rawKey);
+    } catch {
+        return null;
+    }
+
+    if (!key || key.includes("\\") || key.includes("\0") || key.startsWith("/")) {
+        return null;
+    }
+    const segments = key.split("/");
+    if (segments.some((segment) => !segment || segment === "." || segment === "..")) {
+        return null;
+    }
+
+    const publicFolder = (env.S3_FOLDER || "images").replace(/^\/+|\/+$/g, "");
+    if (!publicFolder || !key.startsWith(`${publicFolder}/`)) {
+        return null;
+    }
+    return key;
+}
 
 function buf2hex(buffer: ArrayBuffer) {
     return [...new Uint8Array(buffer)]
@@ -76,22 +104,31 @@ export function BlobService(): Hono {
 
     app.get("/*", async (c: AppContext) => {
         const env = c.get("env");
-        const key = c.req.path.replace(/^\/blob\/?/, "");
+        const rawKey = c.req.path.replace(/^\/blob\/?/, "");
+        const key = resolvePublicStorageKey(env, rawKey);
 
         if (!key) {
-            return c.text("Blob key is required", 400);
+            return c.text("Not found", 404);
         }
 
         try {
-            const response = await profileAsync(c, "blob_fetch", () => getStorageObject(env, decodeURIComponent(key)));
+            const response = await profileAsync(c, "blob_fetch", () => getStorageObject(env, key));
 
             if (!response) {
                 return c.text("Not found", 404);
             }
 
+            const headers = new Headers(response.headers);
+            const contentType = headers.get("Content-Type")?.split(";", 1)[0]?.trim().toLowerCase();
+            if (!contentType || !ALLOWED_PUBLIC_TYPES.has(contentType)) {
+                return c.text("Not found", 404);
+            }
+            headers.set("X-Content-Type-Options", "nosniff");
+            headers.set("Content-Security-Policy", "default-src 'none'; sandbox");
+
             return new Response(response.body, {
                 status: response.status,
-                headers: response.headers,
+                headers,
             });
         } catch (error) {
             console.error("Blob fetch failed:", error);

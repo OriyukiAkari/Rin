@@ -28,8 +28,6 @@ declare namespace Cloudflare {
 		RIN_GITHUB_CLIENT_SECRET: string;
 		RIN_GITHUB_ADMIN_ID: string;
 		JWT_SECRET: string;
-		ADMIN_USERNAME: string;
-		ADMIN_PASSWORD: string;
 		S3_ACCESS_KEY_ID: string;
 		S3_SECRET_ACCESS_KEY: string;
 	}

@@ -243,8 +243,8 @@ export class CacheImpl {
         this.cache = new Map<string, any>();
         this.configReader = configReader;
 
-        // 优先级：参数 > 环境变量，默认为 s3 以向前兼容
-        const mode = storageMode ?? (env.CACHE_STORAGE_MODE as CacheStorageMode) ?? 's3';
+        // 优先级：参数 > 环境变量。默认使用 D1，避免将内部缓存放入公开图片桶。
+        const mode = storageMode ?? (env.CACHE_STORAGE_MODE as CacheStorageMode) ?? 'database';
 
         // 根据存储模式创建对应的提供者
         if (mode === 's3') {
